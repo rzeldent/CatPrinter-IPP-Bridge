@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <new>
 
 #include "ConfigManager.h"
 #include "JobQueue.h"
@@ -398,12 +399,28 @@ bool IppServer::begin(PrinterRegistry *registry, JobQueue *jobs, ConfigManager *
 
 bool IppServer::startTask(UBaseType_t priority, BaseType_t core, uint32_t stackSize)
 {
-    return taskutil::create(taskEntry, "ipp", stackSize, this, priority, &task_, core);
+    clientPriority_ = priority;
+    clientCore_ = core;
+    clientStackSize_ = stackSize;
+    return taskutil::create(taskEntry, "ipp", 4096, this, priority, &task_, core);
 }
 
 void IppServer::taskEntry(void *arg)
 {
     static_cast<IppServer *>(arg)->run();
+}
+
+void IppServer::clientTaskEntry(void *arg)
+{
+    auto *context = static_cast<ClientTaskContext *>(arg);
+    auto *server = context->server;
+    watchdog::subscribe();
+    server->handleClient(context->client);
+    context->client.stop();
+    delete context;
+    watchdog::unsubscribe();
+    --server->activeConnections_;
+    vTaskDelete(nullptr);
 }
 
 std::string IppServer::printerUri(const std::string &printerId) const
@@ -432,11 +449,31 @@ void IppServer::run()
         watchdog::feed();
         maintainMdns();
 
+        if (activeConnections_ >= kMaxConnections)
+        {
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
+
         auto client = server_->accept();
         if (client)
         {
-            handleClient(client);
-            client.stop();
+            auto *context = new (std::nothrow) ClientTaskContext{this, client};
+            if (!context)
+            {
+                LOG_E(TAG, "Unable to allocate IPP connection context");
+                client.stop();
+                continue;
+            }
+            ++activeConnections_;
+            if (!taskutil::create(clientTaskEntry, "ipp_client", clientStackSize_, context, clientPriority_,
+                                  nullptr, clientCore_))
+            {
+                --activeConnections_;
+                context->client.stop();
+                delete context;
+                LOG_E(TAG, "Unable to start IPP connection task");
+            }
         }
         else
         {
@@ -575,11 +612,12 @@ void IppServer::handleClient(WiFiClient &client)
     {
         if (served > 0)
         {
-            // Keep-alive: wait briefly for the next request, but yield to waiting clients.
+            // Release idle connections promptly when all worker slots are occupied.
             const uint32_t start = millis();
             while (!conn.hasBuffered() && client.available() <= 0)
             {
-                if (!client.connected() || millis() - start > settings_.keepAliveMs || server_->hasClient())
+                if (!client.connected() || millis() - start > settings_.keepAliveMs ||
+                    activeConnections_ >= kMaxConnections)
                     return;
                 watchdog::feed();
                 delay(10);
@@ -628,9 +666,9 @@ void IppServer::handleClient(WiFiClient &client)
             conn.write(std::string("HTTP/1.1 100 Continue\r\n\r\n"));
 
         BodyReader body(conn, chunked, req.contentLength);
-        const auto response = handleIpp(req, body);
+        const auto response = handleIpp(req, body, keepAlive);
 
-        if (!body.done() && !body.drain(kMaxDrainBytes))
+        if (keepAlive && !body.done() && !body.drain(kMaxDrainBytes))
             keepAlive = false; // unread document data left: the connection cannot be reused
 
         sendHttpResponse(conn, 200, "OK", "application/ipp", response.data(), response.size(), keepAlive);
@@ -709,7 +747,7 @@ bool IppServer::resolvePrinter(const std::string &rawPath, const ipp::Request &r
     return !uri.empty() && fromPath(uri) == 1;
 }
 
-std::vector<uint8_t> IppServer::handleIpp(const HttpRequest &http, BodyReader &body)
+std::vector<uint8_t> IppServer::handleIpp(const HttpRequest &http, BodyReader &body, bool &keepAlive)
 {
     SystemStats::instance().ippRequests++;
 
@@ -756,7 +794,6 @@ std::vector<uint8_t> IppServer::handleIpp(const HttpRequest &http, BodyReader &b
         else
         {
             const auto uri = baseUri(http) + "/ipp/" + printer.id;
-            statusMessage_.clear();
             LOG_D(TAG, "%s for %s", ipp::operationName(req.operation), printer.id.c_str());
             switch (req.operation)
             {
@@ -764,29 +801,28 @@ std::vector<uint8_t> IppServer::handleIpp(const HttpRequest &http, BodyReader &b
                 opGetPrinterAttributes(req, printer, uri, groups);
                 break;
             case ipp::OP_PRINT_JOB:
-                status = opPrintJob(req, printer, uri, body, leftover, groups);
+                status = opPrintJob(req, printer, uri, body, leftover, groups, message);
                 break;
             case ipp::OP_VALIDATE_JOB:
-                status = opValidateJob(req, groups);
+                status = opValidateJob(req, groups, message);
                 break;
             case ipp::OP_GET_JOB_ATTRIBUTES:
-                status = opGetJobAttributes(req, printer, uri, groups);
+                status = opGetJobAttributes(req, printer, uri, groups, message);
                 break;
             case ipp::OP_GET_JOBS:
-                status = opGetJobs(req, printer, uri, groups);
+                status = opGetJobs(req, printer, uri, groups, message);
                 break;
             case ipp::OP_CANCEL_JOB:
-                status = opCancelJob(req, printer);
+                status = opCancelJob(req, printer, message);
                 break;
             case ipp::OP_IDENTIFY_PRINTER:
-                status = opIdentifyPrinter(printer);
+                status = opIdentifyPrinter(printer, message);
                 break;
             default:
                 status = ipp::SERVER_ERROR_OPERATION_NOT_SUPPORTED;
-                statusMessage_ = "operation not supported";
+                message = "operation not supported";
                 break;
             }
-            message = statusMessage_;
         }
     }
 
@@ -794,6 +830,8 @@ std::vector<uint8_t> IppServer::handleIpp(const HttpRequest &http, BodyReader &b
     {
         SystemStats::instance().ippErrors++;
         LOG_W(TAG, "%s failed: 0x%04x %s", ipp::operationName(req.operation), status, message.c_str());
+        if (!body.done())
+            keepAlive = false; // Do not wait for a rejected upload before sending the error response.
     }
 
     ipp::Writer out;
@@ -1040,14 +1078,14 @@ void IppServer::opGetPrinterAttributes(const ipp::Request &req, const PrinterRec
         w.keyword("media-type-supported", "stationery");
 }
 
-uint16_t IppServer::opValidateJob(const ipp::Request &req, ipp::Writer &w)
+uint16_t IppServer::opValidateJob(const ipp::Request &req, ipp::Writer &w, std::string &message)
 {
     const auto format = req.getString("document-format");
     if (!formatSupported(format))
     {
         w.group(ipp::TAG_UNSUPPORTED_GROUP);
         w.mimeType("document-format", format);
-        statusMessage_ = "document format not supported";
+        message = "document format not supported";
         return ipp::CLIENT_ERROR_DOCUMENT_FORMAT_NOT_SUPPORTED;
     }
     const auto compression = req.getString("compression", "none");
@@ -1055,22 +1093,29 @@ uint16_t IppServer::opValidateJob(const ipp::Request &req, ipp::Writer &w)
     {
         w.group(ipp::TAG_UNSUPPORTED_GROUP);
         w.keyword("compression", compression);
-        statusMessage_ = "compression not supported";
+        message = "compression not supported";
         return ipp::CLIENT_ERROR_ATTRIBUTES_OR_VALUES_NOT_SUPPORTED;
     }
     return ipp::STATUS_OK;
 }
 
 uint16_t IppServer::opPrintJob(const ipp::Request &req, const PrinterRecord &printer, const std::string &uri,
-                               BodyReader &body, std::vector<uint8_t> &leftover, ipp::Writer &w)
+                               BodyReader &body, std::vector<uint8_t> &leftover, ipp::Writer &w, std::string &message)
 {
-    const uint16_t valid = opValidateJob(req, w);
+    const uint16_t valid = opValidateJob(req, w, message);
     if (valid != ipp::STATUS_OK)
         return valid;
 
+    RtosLock uploadLock(uploadMutex_, 0);
+    if (!uploadLock.owns())
+    {
+        message = "another print upload is in progress";
+        return ipp::SERVER_ERROR_BUSY;
+    }
+
     if (jobs_->pendingCount() >= jobs_->capacity())
     {
-        statusMessage_ = "print queue full";
+        message = "print queue full";
         return ipp::SERVER_ERROR_BUSY;
     }
 
@@ -1100,14 +1145,14 @@ uint16_t IppServer::opPrintJob(const ipp::Request &req, const PrinterRecord &pri
     }
     if (body.error())
     {
-        statusMessage_ = "connection error while receiving document";
+        message = "connection error while receiving document";
         return ipp::CLIENT_ERROR_BAD_REQUEST;
     }
     if (ok)
         ok = converter.finish();
     if (!ok)
     {
-        statusMessage_ = converter.error();
+        message = converter.error();
         return converter.overBudget() ? ipp::CLIENT_ERROR_REQUEST_ENTITY_TOO_LARGE
                                       : ipp::CLIENT_ERROR_DOCUMENT_FORMAT_ERROR;
     }
@@ -1137,7 +1182,7 @@ uint16_t IppServer::opPrintJob(const ipp::Request &req, const PrinterRecord &pri
     const auto id = jobs_->submit(std::move(job), &error);
     if (!id)
     {
-        statusMessage_ = error;
+        message = error;
         return ipp::SERVER_ERROR_BUSY;
     }
 
@@ -1198,13 +1243,13 @@ void IppServer::writeJobAttributes(ipp::Writer &w, const JobStatus &job, const s
 }
 
 uint16_t IppServer::opGetJobAttributes(const ipp::Request &req, const PrinterRecord &printer,
-                                       const std::string &uri, ipp::Writer &w)
+                                       const std::string &uri, ipp::Writer &w, std::string &message)
 {
     JobStatus job;
     const auto id = requestedJobId(req);
     if (!id || !jobs_->getStatus(id, job) || job.printerMac != printer.mac)
     {
-        statusMessage_ = "job not found";
+        message = "job not found";
         return ipp::CLIENT_ERROR_NOT_FOUND;
     }
     w.group(ipp::TAG_JOB);
@@ -1213,14 +1258,14 @@ uint16_t IppServer::opGetJobAttributes(const ipp::Request &req, const PrinterRec
 }
 
 uint16_t IppServer::opGetJobs(const ipp::Request &req, const PrinterRecord &printer, const std::string &uri,
-                              ipp::Writer &w)
+                              ipp::Writer &w, std::string &message)
 {
     const auto which = req.getString("which-jobs", "not-completed");
     if (which != "completed" && which != "not-completed" && which != "all")
     {
         w.group(ipp::TAG_UNSUPPORTED_GROUP);
         w.keyword("which-jobs", which);
-        statusMessage_ = "which-jobs value not supported";
+        message = "which-jobs value not supported";
         return ipp::CLIENT_ERROR_ATTRIBUTES_OR_VALUES_NOT_SUPPORTED;
     }
     auto requested = req.getStrings("requested-attributes");
@@ -1247,29 +1292,29 @@ uint16_t IppServer::opGetJobs(const ipp::Request &req, const PrinterRecord &prin
     return ipp::STATUS_OK;
 }
 
-uint16_t IppServer::opCancelJob(const ipp::Request &req, const PrinterRecord &printer)
+uint16_t IppServer::opCancelJob(const ipp::Request &req, const PrinterRecord &printer, std::string &message)
 {
     JobStatus job;
     const auto id = requestedJobId(req);
     if (!id || !jobs_->getStatus(id, job) || job.printerMac != printer.mac)
     {
-        statusMessage_ = "job not found";
+        message = "job not found";
         return ipp::CLIENT_ERROR_NOT_FOUND;
     }
     if (job.finished() || !jobs_->cancel(id))
     {
-        statusMessage_ = "job already finished";
+        message = "job already finished";
         return ipp::CLIENT_ERROR_NOT_POSSIBLE;
     }
     return ipp::STATUS_OK;
 }
 
-uint16_t IppServer::opIdentifyPrinter(const PrinterRecord &printer)
+uint16_t IppServer::opIdentifyPrinter(const PrinterRecord &printer, std::string &message)
 {
     std::string error;
     if (!jobs_->identifyPrinter(printer.mac, &error))
     {
-        statusMessage_ = error;
+        message = error;
         return ipp::SERVER_ERROR_BUSY;
     }
     return ipp::STATUS_OK;

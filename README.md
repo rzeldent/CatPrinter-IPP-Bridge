@@ -1,4 +1,4 @@
-# Kitty IPP Bridge
+# CatPrinter IPP Bridge
 
 [![Build](https://github.com/rzeldent/kitty-ipp-bridge/actions/workflows/main.yml/badge.svg)](https://github.com/rzeldent/kitty-ipp-bridge/actions/workflows/main.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
@@ -10,6 +10,11 @@ Energy (BLE) thermal printers to a Wi-Fi network. It discovers printers by
 their BLE service UUIDs and exposes them as IPP printers using mDNS/DNS-SD.
 The web dashboard shows discovered printers and print jobs and provides
 settings, logs, and a test-page action.
+
+**iPhones are supported through AirPrint**, without installing the printer
+manufacturer's app. The same printing workflow is available on iPads. The bridge accepts
+**Apple Raster / URF (`image/urf`)**, the raster format used by AirPrint, as
+well as PWG Raster for other IPP clients.
 
 The current printer profile supports classic Cat Printer devices using the
 AE30 service (including devices advertising AF30), such as the GB0x, GT01,
@@ -45,6 +50,23 @@ of compatibility: check the BLE protocol rather than appearance alone.
 Paper-roll size, battery capacity, charging connector, and automatic power-off
 time vary by model; consult the printer's own specifications. Thermal prints
 can fade with heat, sunlight, and age, so they are not intended for archival use.
+
+### Image processing and dithering
+
+The ESP32-S3 scales incoming raster images to the printer width and applies
+**serpentine error-diffusion dithering** before sending a 1-bit bitmap over BLE.
+The supplied firmware build selects Floyd-Steinberg; Atkinson is also available.
+Atkinson distributes one eighth of each pixel's quantization error to six
+neighbours across the current row and the next two rows, discarding the
+remaining quarter.
+
+The compile-time define `CATBRIDGE_DITHER_ATKINSON` selects the algorithm:
+`1` uses Atkinson; `0` uses Floyd-Steinberg. Change the existing
+`-DCATBRIDGE_DITHER_ATKINSON=0` flag in `[esp32_common]`'s `build_flags` in
+[platformio.ini](platformio.ini) to `1` to enable Atkinson, then rebuild and
+upload. Without a build override, the raster library defaults to Atkinson.
+Atkinson uses one extra error-buffer row (about 0.8 KiB at 384 dots).
+The raster pipeline's `dither = false` option still uses simple thresholding.
 
 ## Status dashboard
 
@@ -194,14 +216,35 @@ check your router's connected-device list for the bridge's hostname
 Windows discovers printers only on the same subnet, and only when network
 discovery is enabled (the default for networks set to **Private**).
 
-### iPhone and iPad (AirPrint)
+### iPhone printing (AirPrint)
 
-The bridge advertises each printer as an AirPrint printer. In an app, select
-**Share > Print**, then **Printer**; the printer appears under its dashboard
-name. The iPhone or iPad must be on the same Wi-Fi network and subnet as the
-bridge, and the network must allow multicast (mDNS); guest networks and
-client isolation often block it. After a firmware update, reboot the bridge so
-it advertises the new printer details.
+The bridge advertises each printer through Bonjour/mDNS for driverless AirPrint
+printing from an **iPhone**. This also works on iPads.
+
+1. Connect the iPhone to the same Wi-Fi network as the bridge.
+2. Open the photo or document in an app that supports printing.
+3. Select **Share > Print**, tap **Printer**, and choose the printer's
+   dashboard name.
+4. Adjust the available print options and tap **Print**.
+
+AirPrint jobs use **Apple Raster**, also known as **URF (Universal Raster
+Format)**, with MIME type **`image/urf`**. The bridge advertises 8-bit grayscale
+at 300 dpi (`W8`, `RS300`), decodes the raster data, and converts it to the
+printer's monochrome output. This does not change the printer's physical
+203 dpi resolution. PDF and JPEG files are not accepted directly as IPP
+document formats; print them through an AirPrint-capable app so the system
+converts them to a supported raster format.
+
+The iPhone must be on the same network and subnet as the bridge, and the
+network must allow multicast (mDNS); guest networks and client isolation often
+block discovery. The iPhone connects to the bridge over Wi-Fi,
+not directly to the printer over Bluetooth. After a firmware update, reboot
+the bridge so it advertises the new printer details.
+
+The bridge handles up to three IPP connections concurrently, so status and
+cancellation requests can be answered while an iPhone uploads a document.
+Only one print upload is accepted at a time to bound memory use; another
+simultaneous upload receives an IPP busy response and can be retried.
 
 ### Keep printers awake
 

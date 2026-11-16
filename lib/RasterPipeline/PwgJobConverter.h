@@ -6,7 +6,7 @@
  *
  *   PWG/URF raster ─► PwgRasterDecoder ─► toGray() ─► MonoRasterizer ─► MonoBitmap
  *                       (one line buffer)   (one line)  (scale to 384 px,
- *                                                        Floyd–Steinberg,
+ *                                                        error diffusion,
  *                                                        1-bit pack)
  *
  * Input is consumed in arbitrary chunks straight from the network; only one
@@ -37,7 +37,7 @@ namespace raster
         {
             uint16_t width = 384;          ///< Printer width in dots
             bool trimBlankRows = true;     ///< Remove leading/trailing white rows of every page
-            bool dither = true;            ///< Floyd–Steinberg (false = threshold)
+            bool dither = true;            ///< Build-selected error diffusion (false = threshold)
             uint32_t pageGapRows = 24;     ///< Blank rows between pages (3 mm)
             size_t maxOutputBytes = 160 * 1024; ///< Output budget (rows * 48 bytes)
             uint32_t maxPages = 50;        ///< Upper bound on pages per job

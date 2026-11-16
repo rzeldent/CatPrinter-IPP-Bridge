@@ -10,12 +10,13 @@
  *        ▼
  *   vertical resample with the same factor (aspect ratio preserved)
  *        ▼
- *   serpentine Floyd–Steinberg error diffusion
+ *   serpentine Atkinson error diffusion (Floyd–Steinberg selectable at build time)
  *        ▼
  *   1-bit packed row (MSB first, 1 = black) → RowFn callback
  * @endverbatim
  *
- * Memory use is O(output width): two error rows and one accumulator row.
+ * Memory use is O(output width): three error rows (two for Floyd–Steinberg)
+ * and one accumulator row.
  * Optionally removes blank rows at the top and bottom of every page to save
  * paper (very effective for A4/Letter documents printed on a 58 mm roll).
  */
@@ -25,6 +26,14 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+
+#ifndef CATBRIDGE_DITHER_ATKINSON
+#define CATBRIDGE_DITHER_ATKINSON 1
+#endif
+
+#if CATBRIDGE_DITHER_ATKINSON != 0 && CATBRIDGE_DITHER_ATKINSON != 1
+#error "CATBRIDGE_DITHER_ATKINSON must be 0 or 1"
+#endif
 
 namespace raster
 {
@@ -38,7 +47,7 @@ namespace raster
         {
             uint16_t outWidth = 384;    ///< Printer width in pixels
             bool trimBlankRows = true;  ///< Drop leading/trailing white rows of each page
-            bool dither = true;         ///< Floyd–Steinberg (false = simple threshold)
+            bool dither = true;         ///< Build-selected error diffusion (false = simple threshold)
             uint8_t threshold = 128;    ///< Black/white decision level
         };
 
@@ -77,8 +86,11 @@ namespace raster
         std::vector<uint32_t> hsum_;    ///< Scratch for horizontal box filter
         std::vector<uint16_t> hcount_;  ///< Pixels contributing to each output column
         std::vector<uint16_t> scaled_;  ///< Current output row before dithering
-        std::vector<int16_t> errCur_;   ///< Error diffusion, current row (+2 guard pixels)
+        std::vector<int16_t> errCur_;   ///< Error diffusion, current row (two guard pixels per side)
         std::vector<int16_t> errNext_;  ///< Error diffusion, next row
+#if CATBRIDGE_DITHER_ATKINSON
+        std::vector<int16_t> errAfterNext_; ///< Atkinson also diffuses two rows ahead
+#endif
         std::vector<uint8_t> packed_;   ///< Packed output row
     };
 

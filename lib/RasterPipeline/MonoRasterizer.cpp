@@ -21,8 +21,11 @@ namespace raster
 
         acc_.assign(w, 0);
         scaled_.assign(w, 0);
-        errCur_.assign(w + 2, 0);
-        errNext_.assign(w + 2, 0);
+        errCur_.assign(w + 4, 0);
+        errNext_.assign(w + 4, 0);
+#if CATBRIDGE_DITHER_ATKINSON
+        errAfterNext_.assign(w + 4, 0);
+#endif
         packed_.assign((w + 7) / 8, 0);
 
         if (srcWidth_ >= w)
@@ -96,7 +99,11 @@ namespace raster
     {
         const int w = static_cast<int>(opt_.outWidth);
         const auto ltr = (dstY_ & 1u) == 0; // serpentine scan reduces directional artefacts
+#if CATBRIDGE_DITHER_ATKINSON
+        std::fill(errAfterNext_.begin(), errAfterNext_.end(), 0);
+#else
         std::fill(errNext_.begin(), errNext_.end(), 0);
+#endif
         std::fill(packed_.begin(), packed_.end(), 0);
         bool blank = true;
 
@@ -105,7 +112,7 @@ namespace raster
             const auto x = ltr ? i : w - 1 - i;
             int v = static_cast<int>(row[x]);
             if (opt_.dither)
-                v += errCur_[x + 1];
+                v += errCur_[x + 2];
             const auto out = v < opt_.threshold ? 0 : 255;
             if (out == 0)
             {
@@ -117,14 +124,28 @@ namespace raster
                 const auto e = v - out;
                 const auto fwd = ltr ? x + 1 : x - 1;
                 const auto back = ltr ? x - 1 : x + 1;
-                // Indices are offset by one guard pixel on each side.
-                errCur_[fwd + 1] = static_cast<int16_t>(errCur_[fwd + 1] + e * 7 / 16);
-                errNext_[back + 1] = static_cast<int16_t>(errNext_[back + 1] + e * 3 / 16);
-                errNext_[x + 1] = static_cast<int16_t>(errNext_[x + 1] + e * 5 / 16);
-                errNext_[fwd + 1] = static_cast<int16_t>(errNext_[fwd + 1] + e / 16);
+#if CATBRIDGE_DITHER_ATKINSON
+                // Six neighbours receive 1/8 each; the remaining 1/4 is discarded.
+                const auto share = e / 8;
+                const auto fwd2 = ltr ? x + 2 : x - 2;
+                errCur_[fwd + 2] = static_cast<int16_t>(errCur_[fwd + 2] + share);
+                errCur_[fwd2 + 2] = static_cast<int16_t>(errCur_[fwd2 + 2] + share);
+                errNext_[back + 2] = static_cast<int16_t>(errNext_[back + 2] + share);
+                errNext_[x + 2] = static_cast<int16_t>(errNext_[x + 2] + share);
+                errNext_[fwd + 2] = static_cast<int16_t>(errNext_[fwd + 2] + share);
+                errAfterNext_[x + 2] = static_cast<int16_t>(errAfterNext_[x + 2] + share);
+#else
+                errCur_[fwd + 2] = static_cast<int16_t>(errCur_[fwd + 2] + e * 7 / 16);
+                errNext_[back + 2] = static_cast<int16_t>(errNext_[back + 2] + e * 3 / 16);
+                errNext_[x + 2] = static_cast<int16_t>(errNext_[x + 2] + e * 5 / 16);
+                errNext_[fwd + 2] = static_cast<int16_t>(errNext_[fwd + 2] + e / 16);
+#endif
             }
         }
         errCur_.swap(errNext_);
+#if CATBRIDGE_DITHER_ATKINSON
+        errNext_.swap(errAfterNext_);
+#endif
         deliver(packed_.data(), blank);
     }
 

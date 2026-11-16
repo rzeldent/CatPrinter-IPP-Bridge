@@ -9,7 +9,8 @@
  * | ble_scan      | BleDiscovery     | 1    | 2    | Periodic active BLE scan, UUID matching          |
  * | registry      | main.cpp         | 1    | 2    | Applies discovery events, offline time-outs      |
  * | job_worker    | JobQueue         | 1    | 3    | Connects to printers and prints queued jobs      |
- * | ipp           | IppServer        | 0    | 2    | IPP/HTTP server on port 631, mDNS maintenance    |
+ * | ipp           | IppServer        | 0    | 2    | IPP listener on port 631, mDNS maintenance      |
+ * | ipp_client    | IppServer        | 0    | 2    | Up to three concurrent IPP/HTTP connections    |
  * | web_ui        | WebUI            | 0    | 1    | Pushes live updates to dashboard clients (SSE)   |
  * | monitor       | main.cpp         | 0    | 1    | Heap monitoring, Wi-Fi supervision               |
  * | async_tcp     | AsyncTCP library | -    | -    | Serves the REST API / dashboard                  |

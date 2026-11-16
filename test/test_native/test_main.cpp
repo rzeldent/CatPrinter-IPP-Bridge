@@ -465,6 +465,61 @@ static void test_rasterizer_dither_midgray()
 }
 
 
+static void test_rasterizer_dither_reference_and_reset()
+{
+    const uint8_t gray[][8] = {
+        {32, 64, 96, 128, 160, 192, 224, 240},
+        {240, 224, 192, 160, 128, 96, 64, 32},
+        {100, 100, 100, 100, 100, 100, 100, 100},
+        {140, 140, 140, 140, 140, 140, 140, 140},
+    };
+#if CATBRIDGE_DITHER_ATKINSON
+    const uint8_t expected[] = {0xE0, 0x0F, 0xF6, 0x10};
+#else
+    const uint8_t expected[] = {0xD0, 0x0F, 0xF5, 0x0A};
+#endif
+    raster::MonoRasterizer r;
+    raster::MonoRasterizer::Options opt;
+    opt.outWidth = 8;
+    opt.trimBlankRows = false;
+    for (auto page = 0; page < 2; ++page)
+    {
+        std::vector<uint8_t> output;
+        r.beginPage(8, 4, opt, [&](const uint8_t *row, size_t n) { output.insert(output.end(), row, row + n); });
+        for (const auto &row : gray)
+            r.pushLine(row);
+        r.endPage();
+        TEST_ASSERT_EQUAL(sizeof(expected), output.size());
+        TEST_ASSERT_EQUAL_HEX8_ARRAY(expected, output.data(), sizeof(expected));
+    }
+}
+
+static void test_rasterizer_dither_narrow_and_threshold()
+{
+    const uint8_t gray[] = {100, 0, 118};
+#if CATBRIDGE_DITHER_ATKINSON
+    const uint8_t expected[] = {0x80, 0x80, 0x00};
+#else
+    const uint8_t expected[] = {0x80, 0x80, 0x80};
+#endif
+    const uint8_t threshold[] = {0x80, 0x80, 0x80};
+    raster::MonoRasterizer r;
+    raster::MonoRasterizer::Options opt;
+    opt.outWidth = 1;
+    opt.trimBlankRows = false;
+    for (const auto dither : {true, false})
+    {
+        opt.dither = dither;
+        std::vector<uint8_t> output;
+        r.beginPage(1, 3, opt, [&](const uint8_t *row, size_t n) { output.insert(output.end(), row, row + n); });
+        for (const auto &pixel : gray)
+            r.pushLine(&pixel);
+        r.endPage();
+        TEST_ASSERT_EQUAL(sizeof(expected), output.size());
+        TEST_ASSERT_EQUAL_HEX8_ARRAY(dither ? expected : threshold, output.data(), sizeof(expected));
+    }
+}
+
 static std::vector<uint8_t> blackPages(uint32_t pages, uint32_t w, uint32_t h)
 {
     std::vector<uint8_t> s = {'R', 'a', 'S', '2'};
@@ -553,6 +608,8 @@ int main(int, char **)
     RUN_TEST(test_rasterizer_downscale_black);
     RUN_TEST(test_rasterizer_trims_blank_rows);
     RUN_TEST(test_rasterizer_dither_midgray);
+    RUN_TEST(test_rasterizer_dither_reference_and_reset);
+    RUN_TEST(test_rasterizer_dither_narrow_and_threshold);
     RUN_TEST(test_converter_multi_page);
     RUN_TEST(test_converter_budget_and_errors);
     RUN_TEST(test_identify_page);

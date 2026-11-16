@@ -18,11 +18,12 @@
  * received (see raster::PwgJobConverter) and handed to the JobQueue as a
  * 1-bit bitmap.
  *
- * The server runs in its own FreeRTOS task ("ipp") and handles one HTTP
- * connection at a time (HTTP/1.1, keep-alive, chunked transfer encoding,
- * Expect: 100-continue). The same task maintains the DNS-SD advertisements
- * (MdnsPublisher) so that the set of advertised printers follows the
- * registry dynamically, and recovers the mDNS responder after network loss.
+ * The listener task ("ipp") accepts up to three concurrent connections,
+ * handled by separate "ipp_client" tasks (HTTP/1.1, keep-alive, chunked
+ * transfer encoding, Expect: 100-continue). Only one raster upload is
+ * processed at a time, leaving capacity for status and cancellation requests.
+ * The listener also maintains the DNS-SD advertisements (MdnsPublisher) and
+ * recovers the mDNS responder after network loss.
  */
 #pragma once
 
@@ -37,6 +38,7 @@
 
 #include "IppMessage.h"
 #include "MdnsPublisher.h"
+#include "RtosMutex.h"
 
 class PrinterRegistry;
 class JobQueue;
@@ -70,8 +72,15 @@ public:
     std::string printerUri(const std::string &printerId) const;
 
 private:
+    static constexpr uint8_t kMaxConnections = 3;
     class HttpConnection;
     class BodyReader;
+
+    struct ClientTaskContext
+    {
+        IppServer *server;
+        WiFiClient client;
+    };
 
     struct HttpRequest
     {
@@ -87,6 +96,7 @@ private:
     };
 
     static void taskEntry(void *arg);
+    static void clientTaskEntry(void *arg);
     void run();
     void maintainMdns();
     std::vector<MdnsPublisher::Entry> mdnsEntries() const;
@@ -97,7 +107,7 @@ private:
                           const uint8_t *body, size_t len, bool keepAlive);
 
     /** Process one IPP request; @return response body. */
-    std::vector<uint8_t> handleIpp(const HttpRequest &http, BodyReader &body);
+    std::vector<uint8_t> handleIpp(const HttpRequest &http, BodyReader &body, bool &keepAlive);
 
     bool resolvePrinter(const std::string &path, const ipp::Request &req, PrinterRecord &out) const;
     std::string baseUri(const HttpRequest &http) const;
@@ -105,14 +115,14 @@ private:
     void opGetPrinterAttributes(const ipp::Request &req, const PrinterRecord &printer, const std::string &uri,
                                 ipp::Writer &w);
     uint16_t opPrintJob(const ipp::Request &req, const PrinterRecord &printer, const std::string &uri,
-                        BodyReader &body, std::vector<uint8_t> &leftover, ipp::Writer &w);
-    uint16_t opValidateJob(const ipp::Request &req, ipp::Writer &w);
+                        BodyReader &body, std::vector<uint8_t> &leftover, ipp::Writer &w, std::string &message);
+    uint16_t opValidateJob(const ipp::Request &req, ipp::Writer &w, std::string &message);
     uint16_t opGetJobAttributes(const ipp::Request &req, const PrinterRecord &printer, const std::string &uri,
-                                ipp::Writer &w);
+                                ipp::Writer &w, std::string &message);
     uint16_t opGetJobs(const ipp::Request &req, const PrinterRecord &printer, const std::string &uri,
-                       ipp::Writer &w);
-    uint16_t opCancelJob(const ipp::Request &req, const PrinterRecord &printer);
-    uint16_t opIdentifyPrinter(const PrinterRecord &printer);
+                       ipp::Writer &w, std::string &message);
+    uint16_t opCancelJob(const ipp::Request &req, const PrinterRecord &printer, std::string &message);
+    uint16_t opIdentifyPrinter(const PrinterRecord &printer, std::string &message);
 
     void writeJobAttributes(ipp::Writer &w, const JobStatus &job, const std::string &printerUri,
                             const std::vector<std::string> &requested) const;
@@ -126,11 +136,15 @@ private:
     ConfigManager *config_ = nullptr;
     WiFiServer *server_ = nullptr;
     TaskHandle_t task_ = nullptr;
+    std::atomic<uint8_t> activeConnections_{0};
+    uint32_t clientStackSize_ = 10240;
+    UBaseType_t clientPriority_ = 2;
+    BaseType_t clientCore_ = 0;
+    RtosMutex uploadMutex_;
     MdnsPublisher mdns_;
     std::atomic<bool> mdnsDirty_{true};
     std::atomic<bool> mdnsRestart_{false};
     std::atomic<size_t> advertised_{0};
-    std::string statusMessage_; ///< status-message of the operation being processed (IPP task only)
     bool networkWasUp_ = false;
     uint32_t lastMdnsCheck_ = 0;
 };
