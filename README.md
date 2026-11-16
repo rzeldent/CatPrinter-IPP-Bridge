@@ -18,6 +18,34 @@ IPP jobs must be PWG Raster (`image/pwg-raster`) or Apple Raster
 (`image/urf`, used by AirPrint), or one of these sent as
 `application/octet-stream`; the bridge converts them to monochrome bitmaps.
 
+## The kitty printer
+
+![Cat-shaped portable thermal printer](assets/images/kitty%20printer.png)
+
+These small, cat-shaped printers use direct thermal printing: the print head
+darkens heat-sensitive paper, so no ink or toner is needed. They are useful
+for short notes, lists, and monochrome pictures rather than full-size documents
+or colour photographs.
+
+The bridge's current classic Cat Printer profile uses these specifications:
+
+| Feature | Details |
+| --- | --- |
+| Printing | Monochrome, 1-bit raster output |
+| Resolution | 203 dpi |
+| Printable width | 384 dots, approximately 48 mm; this is the printed area, not the paper-roll width |
+| Connection to the bridge | Bluetooth Low Energy (BLE), not Bluetooth Classic |
+| Protocol | Legacy CatGFX, with service `0xAE30`; advertisements using `0xAF30` are also recognised |
+| BLE characteristics | `0xAE01` for writes, `0xAE02` for status and flow-control notifications |
+| Network printing | The ESP32 bridge adds Wi-Fi IPP/AirPrint access; the printer itself connects over BLE |
+
+Similar-looking printers are sold under many names and can contain different
+electronics or firmware. The photo shows the enclosure style, not a guarantee
+of compatibility: check the BLE protocol rather than appearance alone.
+Paper-roll size, battery capacity, charging connector, and automatic power-off
+time vary by model; consult the printer's own specifications. Thermal prints
+can fade with heat, sunlight, and age, so they are not intended for archival use.
+
 ## Status dashboard
 
 Open [http://catbridge.local/](http://catbridge.local/) (or the bridge's IP
