@@ -132,7 +132,7 @@ uint32_t JobQueue::submit(PrintJob &&job, std::string *error)
             return reject("invalid bitmap dimensions");
     }
 
-    const size_t bytes = job.payload.size();
+    const auto bytes = job.payload.size();
     if (queuedBytes_ + bytes > settings_.maxQueuedBytes)
         return reject("queue memory budget exceeded");
     if (uxQueueSpacesAvailable(queue_) == 0)
@@ -362,13 +362,15 @@ void JobQueue::keepAliveTick()
     if (!enabled || !registry_)
         return;
 
-    const uint32_t now = PrinterRegistry::nowSeconds();
-    for (const PrinterRecord &record : registry_->list())
+    const auto now = PrinterRegistry::nowSeconds();
+    for (const auto &record : registry_->list())
     {
-        // Offline printers are off (or out of range) and cannot be kept awake.
-        if (!record.online)
+        // Continue contacting printers previously reached by this bridge even
+        // if they stop advertising and age out of the discovery registry.
+        auto dueIt = keepAliveDue_.find(record.mac);
+        if (!record.online && dueIt == keepAliveDue_.end())
             continue;
-        uint32_t &due = keepAliveDue_[record.mac]; // 0 for a printer not contacted yet: due now
+        auto &due = dueIt == keepAliveDue_.end() ? keepAliveDue_[record.mac] : dueIt->second;
         if (due > now + interval)
             due = now + interval; // interval was shortened
         if (now < due)
@@ -378,7 +380,7 @@ void JobQueue::keepAliveTick()
         if (!BleArbiter::instance().acquire(pdMS_TO_TICKS(500)))
             return;
 
-        const PrinterProfile *profile = PrinterProfiles::findByName(record.profileName);
+        auto profile = PrinterProfiles::findByName(record.profileName);
         if (!profile)
             profile = &PrinterProfiles::defaultProfile();
 
@@ -387,23 +389,24 @@ void JobQueue::keepAliveTick()
         options.verbose = false;
         CatPrinterDriver driver;
         driver.setOptions(options);
-        const bool ok = driver.connect(record.mac, record.addrType, *profile) && driver.ping();
-        const CatPrinterDriver::Error error = driver.lastError();
+        const auto ok = driver.connect(record.mac, record.addrType, *profile) && driver.ping();
+        const auto error = driver.lastError();
         driver.disconnect();
         BleArbiter::instance().release();
 
-        const uint32_t after = PrinterRegistry::nowSeconds();
+        const auto after = PrinterRegistry::nowSeconds();
         if (ok)
         {
             registry_->touch(record.mac);
-            LOG_D(TAG, "Keep-alive sent to %s", record.mac.c_str());
+            LOG_I(TAG, "Keep-alive sent to %s", record.mac.c_str());
             due = after + interval;
         }
         else
         {
             LOG_I(TAG, "Keep-alive for %s failed: %s", record.mac.c_str(), CatPrinterDriver::errorString(error));
-            due = after + (error == CatPrinterDriver::Error::UnsupportedProtocol ? kKeepAliveUnsupportedSec
-                                                                                  : std::min(interval, kKeepAliveRetrySec));
+            due = after + (error == CatPrinterDriver::Error::UnsupportedProtocol
+                               ? kKeepAliveUnsupportedSec
+                               : (record.online ? std::min(interval, kKeepAliveRetrySec) : interval));
         }
         return; // one printer per tick keeps newly queued jobs responsive
     }
@@ -422,7 +425,7 @@ void JobQueue::process(PrintJob *job)
 
     active_ = job->id;
     cancelRequested_ = 0;
-    const uint32_t started = PrinterRegistry::nowSeconds();
+    const auto started = PrinterRegistry::nowSeconds();
     updateStatus(job->id, [&](JobStatus &s) {
         s.state = JobState::Processing;
         s.startedAt = started;
@@ -461,8 +464,8 @@ void JobQueue::process(PrintJob *job)
         }
     }
 
-    const bool cancelled = cancelRequested_ == job->id;
-    const JobState finalState = success ? JobState::Completed : (cancelled ? JobState::Cancelled : JobState::Failed);
+    const auto cancelled = cancelRequested_ == job->id;
+    const auto finalState = success ? JobState::Completed : (cancelled ? JobState::Cancelled : JobState::Failed);
     if (success)
     {
         SystemStats::instance().jobsPrinted++;
@@ -511,7 +514,7 @@ bool JobQueue::execute(PrintJob &job, std::string &error, bool &retryable)
     if (!profile)
         profile = &PrinterProfiles::defaultProfile();
 
-    const ProtocolConfig proto = config_ ? config_->protocol() : ProtocolConfig{};
+    const auto proto = config_ ? config_->protocol() : ProtocolConfig{};
     CatPrinterDriver::Options options;
     options.chunkSize = proto.chunkSize;
     options.packetDelayMs = proto.packetDelayMs;
@@ -588,7 +591,7 @@ bool JobQueue::execute(PrintJob &job, std::string &error, bool &retryable)
             "MTU: " + std::to_string(driver.mtu()),
             "Energy: " + std::to_string(proto.energy) + " Speed: " + std::to_string(proto.speed),
         };
-        raster::MonoBitmap page = raster::buildTestPage(lines, profile->printWidthPx);
+        auto page = raster::buildTestPage(lines, profile->printWidthPx);
         ok = driver.printBitmap(page, settings, proto.feedAfterJobLines, progress);
         break;
     }

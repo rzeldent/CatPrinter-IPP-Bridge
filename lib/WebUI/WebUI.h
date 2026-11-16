@@ -83,7 +83,7 @@ private:
         } kind;
         char mac[18];
         uint32_t jobId;
-        char text[136];
+        char text[304];
     };
 
     static void taskEntry(void *arg);

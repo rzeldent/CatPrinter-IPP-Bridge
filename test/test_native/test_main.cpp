@@ -28,7 +28,7 @@ static std::string hex(const std::vector<uint8_t> &v)
 {
     static const char *d = "0123456789abcdef";
     std::string s;
-    for (uint8_t b : v)
+    for (auto b : v)
     {
         s.push_back(d[b >> 4]);
         s.push_back(d[b & 15]);
@@ -58,7 +58,7 @@ static void test_lattice_start_packet()
     std::vector<uint8_t> out;
     catgfx::PrintSettings s;
     enc.beginJob(out, s);
-    const std::string h = hex(out);
+    const auto h = hex(out);
     TEST_ASSERT_TRUE(h.find("5178a6000b00aa551738445f5f5f44382ca1ff") != std::string::npos);
 }
 
@@ -166,13 +166,13 @@ static std::vector<uint8_t> buildPrintJobRequest()
 
 static void test_ipp_parse_complete_request()
 {
-    std::vector<uint8_t> msg = buildPrintJobRequest();
-    const size_t attrLen = msg.size();
+    auto msg = buildPrintJobRequest();
+    const auto attrLen = msg.size();
     const char doc[] = "RaS2-document";
     msg.insert(msg.end(), doc, doc + sizeof(doc) - 1);
 
     ipp::RequestParser p;
-    const size_t consumed = p.feed(msg.data(), msg.size());
+    const auto consumed = p.feed(msg.data(), msg.size());
     TEST_ASSERT_TRUE(p.complete());
     TEST_ASSERT_FALSE(p.error());
     TEST_ASSERT_EQUAL(attrLen, consumed);
@@ -192,8 +192,8 @@ static void test_ipp_parse_complete_request()
 
 static void test_ipp_parse_byte_by_byte()
 {
-    std::vector<uint8_t> msg = buildPrintJobRequest();
-    const size_t attrLen = msg.size();
+    auto msg = buildPrintJobRequest();
+    const auto attrLen = msg.size();
     msg.push_back('X');
     ipp::RequestParser p;
     size_t total = 0;
@@ -414,7 +414,7 @@ static void test_rasterizer_downscale_black()
     for (const auto &row : rows)
     {
         TEST_ASSERT_EQUAL(48, row.size());
-        for (uint8_t b : row)
+        for (auto b : row)
             TEST_ASSERT_EQUAL_HEX8(0xFF, b);
     }
 }
@@ -476,7 +476,7 @@ static std::vector<uint8_t> blackPages(uint32_t pages, uint32_t w, uint32_t h)
         s.push_back(static_cast<uint8_t>(h - 1));
         for (uint32_t x = 0; x < w; x += 128)
         {
-            const uint32_t n = std::min<uint32_t>(128, w - x);
+            const auto n = std::min<uint32_t>(128, w - x);
             s.push_back(static_cast<uint8_t>(n - 1));
             s.push_back(0x00);
         }
@@ -517,16 +517,16 @@ static void test_converter_budget_and_errors()
 
 static void test_identify_page()
 {
-    raster::MonoBitmap bmp = raster::buildIdentifyPage("Desk Label Printer", "aa:bb:cc:dd:ee:ff");
+    auto bmp = raster::buildIdentifyPage("Desk Label Printer", "aa:bb:cc:dd:ee:ff");
     TEST_ASSERT_EQUAL(384, bmp.width);
     TEST_ASSERT_TRUE(bmp.height > 60);
     TEST_ASSERT_EQUAL(bmp.height * 48, bmp.data.size());
     size_t ink = 0;
-    for (uint8_t b : bmp.data)
+    for (auto b : bmp.data)
         ink += b ? 1 : 0;
     TEST_ASSERT_TRUE(ink > 100);
 
-    raster::MonoBitmap test = raster::buildTestPage({"line one", "line two"});
+    auto test = raster::buildTestPage({"line one", "line two"});
     TEST_ASSERT_TRUE(test.height > 0);
     TEST_ASSERT_EQUAL(test.height * 48, test.data.size());
 }

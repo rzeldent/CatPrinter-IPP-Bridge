@@ -116,10 +116,11 @@ Cat Printers power themselves off after a period of inactivity. To prevent
 this, enable **Keep printers awake** in **Bridge settings**. While no job is
 printing, the bridge then briefly connects to each online printer at the set
 **Keep-alive interval** (default 120 seconds) and requests its status; nothing
-is printed. Choose an interval shorter than the printer's power-off time.
-A printer that is already off cannot be woken over Bluetooth; turn it on
-again with its power button. Keeping printers awake drains their batteries
-faster.
+is printed. The bridge continues trying printers it has already contacted
+even if they stop advertising and age out of discovery. Choose an interval
+shorter than the printer's power-off time. A printer that is already off
+cannot be woken over Bluetooth; turn it on again with its power button.
+Keeping printers awake drains their batteries faster.
 
 BLE transfers enforce at least 20 ms between writes, including when older saved
 settings specify a shorter delay. Printer pause notifications still stop the

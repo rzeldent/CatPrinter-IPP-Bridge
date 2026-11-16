@@ -71,7 +71,7 @@ void PrinterRegistry::begin(ConfigManager *config, uint32_t offlineTimeoutSec)
 bool PrinterRegistry::upsert(const std::string &macIn, const std::string &deviceName, int rssi, uint8_t addrType,
                              const std::string &profileName)
 {
-    const std::string mac = macutil::normalize(macIn);
+    const auto mac = macutil::normalize(macIn);
     if (mac.empty())
         return false;
 
@@ -81,7 +81,7 @@ bool PrinterRegistry::upsert(const std::string &macIn, const std::string &device
     {
         RtosLock lock(mutex_);
         auto it = printers_.find(mac);
-        const uint32_t now = nowSeconds();
+        const auto now = nowSeconds();
         if (it == printers_.end())
         {
             PrinterRecord r;
@@ -102,7 +102,7 @@ bool PrinterRegistry::upsert(const std::string &macIn, const std::string &device
         else
         {
             PrinterRecord &r = it->second;
-            const bool wasOnline = r.online;
+            const auto wasOnline = r.online;
             if (!deviceName.empty() && deviceName != r.deviceName)
             {
                 r.deviceName = deviceName;
@@ -174,7 +174,7 @@ size_t PrinterRegistry::checkTimeouts()
     std::vector<PrinterRecord> changed;
     {
         RtosLock lock(mutex_);
-        const uint32_t now = nowSeconds();
+        const auto now = nowSeconds();
         for (auto &kv : printers_)
         {
             PrinterRecord &r = kv.second;
@@ -205,7 +205,7 @@ bool PrinterRegistry::get(const std::string &mac, PrinterRecord &out) const
 
 bool PrinterRegistry::find(const std::string &macOrId, PrinterRecord &out) const
 {
-    const std::string mac = macutil::normalize(macOrId);
+    const auto mac = macutil::normalize(macOrId);
     return !mac.empty() && get(mac, out);
 }
 

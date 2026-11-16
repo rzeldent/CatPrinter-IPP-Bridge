@@ -70,7 +70,7 @@ namespace ipp
     {
         if (complete_ || error())
             return 0;
-        const size_t prev = buf_.size();
+        const auto prev = buf_.size();
         buf_.insert(buf_.end(), data, data + len);
         if (!tryParse())
         {
@@ -79,7 +79,7 @@ namespace ipp
             return error() ? 0 : len;
         }
         // tryParse() leaves the number of attribute bytes in buf_.size()
-        const size_t consumed = buf_.size() - prev;
+        const auto consumed = buf_.size() - prev;
         buf_.clear();
         buf_.shrink_to_fit();
         return consumed;
@@ -87,7 +87,7 @@ namespace ipp
 
     bool RequestParser::tryParse()
     {
-        const size_t n = buf_.size();
+        const auto n = buf_.size();
         const uint8_t *b = buf_.data();
         if (n < 9)
             return false;
@@ -122,16 +122,16 @@ namespace ipp
                 ++pos;
                 continue;
             }
-            size_t p = pos + 1;
+            auto p = pos + 1;
             if (p + 2 > n)
                 return false;
-            const uint16_t nameLen = be16(b + p);
+            const auto nameLen = be16(b + p);
             p += 2;
             if (p + nameLen + 2 > n)
                 return false;
             std::string name(reinterpret_cast<const char *>(b + p), nameLen);
             p += nameLen;
-            const uint16_t valueLen = be16(b + p);
+            const auto valueLen = be16(b + p);
             p += 2;
             if (p + valueLen > n)
                 return false;
@@ -220,7 +220,7 @@ namespace ipp
     void Writer::string(uint8_t tag, const std::string &name, const std::string &value)
     {
         // IPP limits most string values to 1023 octets; never exceed 16 bit lengths.
-        const size_t len = value.size() > 0xFFFF ? 0xFFFF : value.size();
+        const auto len = value.size() > 0xFFFF ? 0xFFFF : value.size();
         raw(tag, name, reinterpret_cast<const uint8_t *>(value.data()), len);
     }
 
@@ -241,7 +241,7 @@ namespace ipp
     {
         for (size_t i = 0; i < values.size(); ++i)
         {
-            const int32_t value = values[i];
+            const auto value = values[i];
             const uint8_t v[4] = {static_cast<uint8_t>(value >> 24), static_cast<uint8_t>(value >> 16),
                                   static_cast<uint8_t>(value >> 8), static_cast<uint8_t>(value)};
             raw(tag, i == 0 ? name : std::string(), v, 4);

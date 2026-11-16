@@ -123,7 +123,7 @@ namespace raster
                 lines.push_back(current);
                 current.clear();
             };
-            for (char c : text)
+            for (auto c : text)
             {
                 if (c == '\n')
                 {
@@ -133,10 +133,10 @@ namespace raster
                 if (maxChars && current.size() >= maxChars)
                 {
                     // Prefer breaking at the last space.
-                    size_t sp = current.rfind(' ');
+                    auto sp = current.rfind(' ');
                     if (sp != std::string::npos && sp > 0)
                     {
-                        std::string rest = current.substr(sp + 1);
+                        auto rest = current.substr(sp + 1);
                         current.resize(sp);
                         flush();
                         current = rest;
@@ -165,10 +165,10 @@ namespace raster
     {
         if (scale == 0)
             scale = 1;
-        const size_t maxChars = charsPerLine(bmp.width, scale);
-        for (const std::string &line : layout(text, maxChars))
+        const auto maxChars = charsPerLine(bmp.width, scale);
+        for (const auto &line : layout(text, maxChars))
         {
-            const uint32_t top = bmp.height;
+            const auto top = bmp.height;
             bmp.appendBlank(kLineHeight * scale);
             const uint32_t textWidth = static_cast<uint32_t>(line.size()) * kAdvance * scale;
             uint32_t x0 = center && textWidth < bmp.width ? (bmp.width - textWidth) / 2 : 0;
@@ -188,7 +188,7 @@ namespace raster
 
     void TextRenderer::drawRule(MonoBitmap &bmp, uint32_t thickness)
     {
-        const uint32_t top = bmp.height;
+        const auto top = bmp.height;
         bmp.appendBlank(thickness);
         for (uint32_t y = top; y < bmp.height; ++y)
             for (uint32_t x = 0; x < bmp.width; ++x)
@@ -238,7 +238,7 @@ namespace raster
         bmp.appendBlank(8);
 
         // Checkerboard and vertical lines to check alignment of the print head.
-        const uint32_t top = bmp.height;
+        const auto top = bmp.height;
         bmp.appendBlank(48);
         for (uint32_t y = 0; y < 24; ++y)
             for (uint32_t x = 0; x < width; ++x)

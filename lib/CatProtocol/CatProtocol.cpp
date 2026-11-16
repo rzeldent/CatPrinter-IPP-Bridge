@@ -59,7 +59,7 @@ namespace catgfx
                                   static_cast<uint8_t>(settings.energy >> 8)};
         packet(out, CMD_ENERGY, energy, sizeof(energy));
 
-        const uint8_t speed = settings.speed;
+        const auto speed = settings.speed;
         packet(out, CMD_SPEED, &speed, 1);
 
         // Draw mode: 0x00 = image (bitmap), 0x01 = text.
@@ -71,7 +71,7 @@ namespace catgfx
     {
         // The printer expects LSB-first bit order (bit 0 = left-most pixel).
         uint8_t native[96];
-        const size_t nativeBytes = width_ / 8 > sizeof(native) ? sizeof(native) : width_ / 8;
+        const auto nativeBytes = width_ / 8 > sizeof(native) ? sizeof(native) : width_ / 8;
         for (size_t i = 0; i < nativeBytes; ++i)
         {
             uint8_t b = i < rowBytes ? row[i] : 0;
@@ -111,7 +111,7 @@ namespace catgfx
     FlowControl LegacyEncoder::parseNotification(const uint8_t *data, size_t len) const
     {
         // A notification can contain multiple frames; the last flow state wins.
-        FlowControl result = FlowControl::None;
+        auto result = FlowControl::None;
         for (size_t offset = 0; len - offset >= 8;)
         {
             const uint8_t *frame = data + offset;
@@ -120,13 +120,13 @@ namespace catgfx
                 ++offset;
                 continue;
             }
-            const size_t payloadBytes = static_cast<size_t>(frame[4]) | (static_cast<size_t>(frame[5]) << 8);
+            const auto payloadBytes = static_cast<size_t>(frame[4]) | (static_cast<size_t>(frame[5]) << 8);
             if (payloadBytes > len - offset - 8)
             {
                 ++offset;
                 continue;
             }
-            const size_t frameBytes = payloadBytes + 8;
+            const auto frameBytes = payloadBytes + 8;
             if (frame[frameBytes - 1] != 0xFF || frame[frameBytes - 2] != crc8(frame + 6, payloadBytes))
             {
                 ++offset;

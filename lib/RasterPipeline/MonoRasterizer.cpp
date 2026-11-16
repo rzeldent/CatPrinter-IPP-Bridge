@@ -95,18 +95,18 @@ namespace raster
     void MonoRasterizer::ditherAndOutput(const uint16_t *row)
     {
         const int w = static_cast<int>(opt_.outWidth);
-        const bool ltr = (dstY_ & 1u) == 0; // serpentine scan reduces directional artefacts
+        const auto ltr = (dstY_ & 1u) == 0; // serpentine scan reduces directional artefacts
         std::fill(errNext_.begin(), errNext_.end(), 0);
         std::fill(packed_.begin(), packed_.end(), 0);
         bool blank = true;
 
         for (int i = 0; i < w; ++i)
         {
-            const int x = ltr ? i : w - 1 - i;
+            const auto x = ltr ? i : w - 1 - i;
             int v = static_cast<int>(row[x]);
             if (opt_.dither)
                 v += errCur_[x + 1];
-            const int out = v < opt_.threshold ? 0 : 255;
+            const auto out = v < opt_.threshold ? 0 : 255;
             if (out == 0)
             {
                 packed_[x >> 3] |= static_cast<uint8_t>(0x80u >> (x & 7));
@@ -114,9 +114,9 @@ namespace raster
             }
             if (opt_.dither)
             {
-                const int e = v - out;
-                const int fwd = ltr ? x + 1 : x - 1;
-                const int back = ltr ? x - 1 : x + 1;
+                const auto e = v - out;
+                const auto fwd = ltr ? x + 1 : x - 1;
+                const auto back = ltr ? x - 1 : x + 1;
                 // Indices are offset by one guard pixel on each side.
                 errCur_[fwd + 1] = static_cast<int16_t>(errCur_[fwd + 1] + e * 7 / 16);
                 errNext_[back + 1] = static_cast<int16_t>(errNext_[back + 1] + e * 3 / 16);
@@ -130,7 +130,7 @@ namespace raster
 
     void MonoRasterizer::deliver(const uint8_t *packed, bool blank)
     {
-        const size_t rowBytes = packed_.size();
+        const auto rowBytes = packed_.size();
         if (!opt_.trimBlankRows)
         {
             if (sink_)

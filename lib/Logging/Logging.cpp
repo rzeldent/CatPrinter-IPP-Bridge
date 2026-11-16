@@ -27,7 +27,7 @@ const char *logLevelName(LogLevel level)
 LogLevel logLevelFromString(const std::string &name, LogLevel fallback)
 {
     static const LogLevel levels[] = {LogLevel::Debug, LogLevel::Info, LogLevel::Warn, LogLevel::Error, LogLevel::None};
-    for (LogLevel l : levels)
+    for (auto l : levels)
         if (strcasecmp(name.c_str(), logLevelName(l)) == 0)
             return l;
     return fallback;
@@ -50,7 +50,7 @@ std::string formatLogLine(const LogEntry &entry)
 // ---------------------------------------------------------------------------
 void SerialLogSink::write(const LogEntry &entry)
 {
-    std::string line = formatLogLine(entry);
+    auto line = formatLogLine(entry);
     Serial.println(line.c_str());
 }
 
@@ -64,7 +64,7 @@ RingBufferLogSink::RingBufferLogSink(size_t capacity) : capacity_(capacity ? cap
 
 void RingBufferLogSink::write(const LogEntry &entry)
 {
-    std::string line = formatLogLine(entry);
+    auto line = formatLogLine(entry);
     std::function<void(const std::string &)> listener;
     {
         RtosLock lock(mutex_);

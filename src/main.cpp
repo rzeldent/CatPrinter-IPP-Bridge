@@ -99,7 +99,7 @@ static JobQueue::Settings jobSettings(const BridgeConfig &b)
 /** Apply settings changed through the REST API without a reboot. */
 static void applyConfig()
 {
-    const BridgeConfig b = gConfig.bridge();
+    const auto b = gConfig.bridge();
     Logger::instance().setLevel(static_cast<LogLevel>(b.logLevel));
     gDiscovery.applySettings(discoverySettings(b));
     gRegistry.setOfflineTimeout(b.offlineTimeoutSec);
@@ -132,7 +132,7 @@ static void onWifiEvent(arduino_event_id_t event, arduino_event_info_t info)
 static void startAccessPoint(const NetworkConfig &net)
 {
     const std::string mac = WiFi.macAddress().c_str();
-    const std::string ssid = "CatBridge-" + macutil::shortSuffix(mac);
+    const auto ssid = "CatBridge-" + macutil::shortSuffix(mac);
     WiFi.mode(net.ssid.empty() ? WIFI_AP : WIFI_AP_STA);
     WiFi.softAP(ssid.c_str(), net.apPassword.c_str());
     LOG_W("wifi", "Setup access point '%s' active, open http://%s/", ssid.c_str(),
@@ -141,7 +141,7 @@ static void startAccessPoint(const NetworkConfig &net)
 
 static void startWifi()
 {
-    const NetworkConfig net = gConfig.network();
+    const auto net = gConfig.network();
     gHostname = net.hostname.empty() ? CATBRIDGE_HOSTNAME : net.hostname;
 
     WiFi.onEvent(onWifiEvent);
@@ -190,7 +190,7 @@ static void registryTask(void *)
         DiscoveryEvent ev;
         while (gDiscovery.receive(ev, pdMS_TO_TICKS(1000)))
         {
-            const std::string profile =
+            const auto profile =
                 ev.profileIndex < profiles.size() ? profiles[ev.profileIndex].profileName : std::string();
             gRegistry.upsert(ev.mac, ev.deviceName, ev.rssi, ev.addrType, profile);
             watchdog::feed();
@@ -209,7 +209,7 @@ static void registryTask(void *)
 static void monitorTask(void *)
 {
     watchdog::subscribe();
-    SystemStats &stats = SystemStats::instance();
+    auto &stats = SystemStats::instance();
     uint32_t lastHeapLog = 0;
     uint32_t staConnectedSince = 0;
     uint8_t lowHeapCount = 0;
@@ -217,7 +217,7 @@ static void monitorTask(void *)
     for (;;)
     {
         watchdog::feed();
-        const uint32_t freeHeap = ESP.getFreeHeap();
+        const auto freeHeap = ESP.getFreeHeap();
         if (freeHeap < stats.minFreeHeap)
             stats.minFreeHeap = freeHeap;
 
@@ -275,7 +275,7 @@ void setup()
     Serial.begin(115200);
     delay(200);
 
-    Logger &log = Logger::instance();
+    auto &log = Logger::instance();
     log.addSink(&gSerialLog);
     log.addSink(&gRingLog);
 
@@ -294,7 +294,7 @@ void setup()
 
     if (!gConfig.begin())
         LOG_E(TAG, "Configuration storage unavailable, using defaults");
-    const BridgeConfig bridge = gConfig.bridge();
+    const auto bridge = gConfig.bridge();
     log.setLevel(static_cast<LogLevel>(bridge.logLevel));
 
     // ---- Network -----------------------------------------------------------

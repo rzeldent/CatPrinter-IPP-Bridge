@@ -52,7 +52,7 @@ namespace
 
     bool iequals(const std::string &a, const char *b)
     {
-        const size_t n = strlen(b);
+        const auto n = strlen(b);
         if (a.size() != n)
             return false;
         for (size_t i = 0; i < n; ++i)
@@ -82,7 +82,7 @@ namespace
     std::string sanitizeHost(const std::string &host)
     {
         std::string out;
-        for (char c : host)
+        for (auto c : host)
         {
             if (std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == ':' || c == '[' ||
                 c == ']')
@@ -97,10 +97,10 @@ namespace
     {
         if (!host.empty() && host[0] == '[')
         {
-            const size_t end = host.find(']');
+            const auto end = host.find(']');
             return end == std::string::npos ? host : host.substr(0, end + 1);
         }
-        const size_t colon = host.find(':');
+        const auto colon = host.find(':');
         return colon == std::string::npos ? host : host.substr(0, colon);
     }
 
@@ -196,10 +196,10 @@ public:
         const uint32_t start = millis();
         for (;;)
         {
-            const int avail = client_.available();
+            const auto avail = client_.available();
             if (avail > 0)
             {
-                const int n = client_.read(buf_, std::min<size_t>(static_cast<size_t>(avail), sizeof(buf_)));
+                const auto n = client_.read(buf_, std::min<size_t>(static_cast<size_t>(avail), sizeof(buf_)));
                 if (n > 0)
                 {
                     pos_ = 0;
@@ -227,7 +227,7 @@ public:
     {
         if (!max || !fill())
             return 0;
-        const size_t n = std::min(max, len_ - pos_);
+        const auto n = std::min(max, len_ - pos_);
         memcpy(out, buf_ + pos_, n);
         pos_ += n;
         return n;
@@ -239,7 +239,7 @@ public:
         line.clear();
         for (;;)
         {
-            const int ch = readByte();
+            const auto ch = readByte();
             if (ch < 0)
                 return false;
             if (ch == '\n')
@@ -260,7 +260,7 @@ public:
         uint32_t start = millis();
         while (off < len)
         {
-            const size_t n = client_.write(data + off, len - off);
+            const auto n = client_.write(data + off, len - off);
             if (n == 0)
             {
                 if (!client_.connected() || millis() - start > timeoutMs_)
@@ -335,7 +335,7 @@ public:
                 needCrlf_ = true;
             }
         }
-        const size_t n = conn_.read(out, std::min(max, remaining_));
+        const auto n = conn_.read(out, std::min(max, remaining_));
         if (n == 0)
             return setError();
         remaining_ -= n;
@@ -351,7 +351,7 @@ public:
         size_t total = 0;
         while (!done_ && !error_ && total <= maxBytes)
         {
-            const size_t n = read(tmp, sizeof(tmp));
+            const auto n = read(tmp, sizeof(tmp));
             if (!n)
                 break;
             total += n;
@@ -408,7 +408,7 @@ void IppServer::taskEntry(void *arg)
 
 std::string IppServer::printerUri(const std::string &printerId) const
 {
-    std::string uri = "ipp://" + settings_.hostname + ".local";
+    auto uri = "ipp://" + settings_.hostname + ".local";
     if (settings_.port != 631)
         uri += ":" + std::to_string(settings_.port);
     return uri + "/ipp/" + printerId;
@@ -432,7 +432,7 @@ void IppServer::run()
         watchdog::feed();
         maintainMdns();
 
-        WiFiClient client = server_->accept();
+        auto client = server_->accept();
         if (client)
         {
             handleClient(client);
@@ -466,7 +466,7 @@ std::vector<MdnsPublisher::Entry> IppServer::mdnsEntries() const
 
 void IppServer::maintainMdns()
 {
-    const bool up = WiFi.isConnected() || (WiFi.getMode() & WIFI_MODE_AP);
+    const auto up = WiFi.isConnected() || (WiFi.getMode() & WIFI_MODE_AP);
     if (!up)
     {
         networkWasUp_ = false;
@@ -518,8 +518,8 @@ bool IppServer::readRequestHead(HttpConnection &conn, HttpRequest &req)
             return false;
     } while (line.empty());
 
-    const size_t sp1 = line.find(' ');
-    const size_t sp2 = line.rfind(' ');
+    const auto sp1 = line.find(' ');
+    const auto sp2 = line.rfind(' ');
     if (sp1 == std::string::npos || sp2 == sp1)
         return false;
     req.method = line.substr(0, sp1);
@@ -532,11 +532,11 @@ bool IppServer::readRequestHead(HttpConnection &conn, HttpRequest &req)
             return false;
         if (line.empty())
             break;
-        const size_t colon = line.find(':');
+        const auto colon = line.find(':');
         if (colon == std::string::npos)
             continue;
-        const std::string name = lower(trim(line.substr(0, colon)));
-        const std::string value = trim(line.substr(colon + 1));
+        const auto name = lower(trim(line.substr(0, colon)));
+        const auto value = trim(line.substr(colon + 1));
         if (name == "host")
             req.host = value;
         else if (name == "content-type")
@@ -557,7 +557,7 @@ void IppServer::sendHttpResponse(HttpConnection &conn, int code, const char *rea
                                  const uint8_t *body, size_t len, bool keepAlive)
 {
     char head[256];
-    const int n = snprintf(head, sizeof(head),
+    const auto n = snprintf(head, sizeof(head),
                            "HTTP/1.1 %d %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nConnection: %s\r\n"
                            "Server: CatBridge/%s IPP/2.0\r\n\r\n",
                            code, reason, contentType, static_cast<unsigned>(len), keepAlive ? "keep-alive" : "close",
@@ -590,17 +590,17 @@ void IppServer::handleClient(WiFiClient &client)
         if (!readRequestHead(conn, req))
             return;
 
-        bool keepAlive = req.version == "HTTP/1.1" ? !iequals(req.connection, "close")
+        auto keepAlive = req.version == "HTTP/1.1" ? !iequals(req.connection, "close")
                                                     : iequals(req.connection, "keep-alive");
 
         if (req.method == "GET" || req.method == "HEAD")
         {
-            const std::string host = hostWithoutPort(sanitizeHost(req.host.empty() ? settings_.hostname + ".local"
-                                                                                    : req.host));
-            const std::string html = "<!doctype html><html><head><title>CatBridge</title></head><body>"
+            const auto host = hostWithoutPort(sanitizeHost(req.host.empty() ? settings_.hostname + ".local"
+                                                                            : req.host));
+            const auto html = "<!doctype html><html><head><title>CatBridge</title></head><body>"
                                      "<h1>CatBridge IPP endpoint</h1><p>Manage printers at <a href=\"http://" +
                                      host + "/\">http://" + host + "/</a></p></body></html>";
-            const bool head = req.method == "HEAD";
+            const auto head = req.method == "HEAD";
             sendHttpResponse(conn, 200, "OK", "text/html", reinterpret_cast<const uint8_t *>(html.data()),
                              head ? 0 : html.size(), keepAlive);
             if (!keepAlive)
@@ -618,7 +618,7 @@ void IppServer::handleClient(WiFiClient &client)
             sendHttpResponse(conn, 415, "Unsupported Media Type", "text/plain", nullptr, 0, false);
             return;
         }
-        const bool chunked = req.transferEncoding.find("chunked") != std::string::npos;
+        const auto chunked = req.transferEncoding.find("chunked") != std::string::npos;
         if (!chunked && req.contentLength < 0)
         {
             sendHttpResponse(conn, 411, "Length Required", "text/plain", nullptr, 0, false);
@@ -628,7 +628,7 @@ void IppServer::handleClient(WiFiClient &client)
             conn.write(std::string("HTTP/1.1 100 Continue\r\n\r\n"));
 
         BodyReader body(conn, chunked, req.contentLength);
-        const std::vector<uint8_t> response = handleIpp(req, body);
+        const auto response = handleIpp(req, body);
 
         if (!body.done() && !body.drain(kMaxDrainBytes))
             keepAlive = false; // unread document data left: the connection cannot be reused
@@ -644,7 +644,7 @@ void IppServer::handleClient(WiFiClient &client)
 // ===========================================================================
 std::string IppServer::baseUri(const HttpRequest &http) const
 {
-    std::string host = sanitizeHost(http.host);
+    auto host = sanitizeHost(http.host);
     if (host.empty())
     {
         host = settings_.hostname + ".local";
@@ -657,14 +657,14 @@ std::string IppServer::baseUri(const HttpRequest &http) const
 bool IppServer::resolvePrinter(const std::string &rawPath, const ipp::Request &req, PrinterRecord &out) const
 {
     auto fromPath = [&](std::string path) -> int {
-        const size_t q = path.find('?');
+        const auto q = path.find('?');
         if (q != std::string::npos)
             path.resize(q);
         // Accept absolute URIs (printer-uri attribute) as well as plain paths.
-        const size_t scheme = path.find("://");
+        const auto scheme = path.find("://");
         if (scheme != std::string::npos)
         {
-            const size_t slash = path.find('/', scheme + 3);
+            const auto slash = path.find('/', scheme + 3);
             path = slash == std::string::npos ? "/" : path.substr(slash);
         }
         while (path.size() > 1 && path.back() == '/')
@@ -676,7 +676,7 @@ bool IppServer::resolvePrinter(const std::string &rawPath, const ipp::Request &r
         else if (path.rfind("/ipp/", 0) == 0)
         {
             id = path.substr(5);
-            const size_t slash = id.find('/');
+            const auto slash = id.find('/');
             if (slash != std::string::npos)
                 id.resize(slash);
         }
@@ -702,10 +702,10 @@ bool IppServer::resolvePrinter(const std::string &rawPath, const ipp::Request &r
         return 0;
     };
 
-    const int byPath = fromPath(rawPath);
+    const auto byPath = fromPath(rawPath);
     if (byPath >= 0)
         return byPath == 1;
-    const std::string uri = req.getString("printer-uri");
+    const auto uri = req.getString("printer-uri");
     return !uri.empty() && fromPath(uri) == 1;
 }
 
@@ -718,10 +718,10 @@ std::vector<uint8_t> IppServer::handleIpp(const HttpRequest &http, BodyReader &b
     uint8_t buf[512];
     while (!parser.complete() && !parser.error())
     {
-        const size_t n = body.read(buf, sizeof(buf));
+        const auto n = body.read(buf, sizeof(buf));
         if (!n)
             break;
-        const size_t used = parser.feed(buf, n);
+        const auto used = parser.feed(buf, n);
         if (parser.complete() && used < n)
             leftover.assign(buf + used, buf + n);
     }
@@ -755,7 +755,7 @@ std::vector<uint8_t> IppServer::handleIpp(const HttpRequest &http, BodyReader &b
         }
         else
         {
-            const std::string uri = baseUri(http) + "/ipp/" + printer.id;
+            const auto uri = baseUri(http) + "/ipp/" + printer.id;
             statusMessage_.clear();
             LOG_D(TAG, "%s for %s", ipp::operationName(req.operation), printer.id.c_str());
             switch (req.operation)
@@ -816,11 +816,11 @@ bool IppServer::formatSupported(const std::string &format)
 
 uint32_t IppServer::requestedJobId(const ipp::Request &req)
 {
-    const int32_t id = req.getInt("job-id", 0);
+    const auto id = req.getInt("job-id", 0);
     if (id > 0)
         return static_cast<uint32_t>(id);
-    const std::string uri = req.getString("job-uri");
-    const size_t slash = uri.rfind('/');
+    const auto uri = req.getString("job-uri");
+    const auto slash = uri.rfind('/');
     if (slash != std::string::npos)
         return static_cast<uint32_t>(strtoul(uri.c_str() + slash + 1, nullptr, 10));
     return 0;
@@ -832,8 +832,8 @@ uint32_t IppServer::requestedJobId(const ipp::Request &req)
 void IppServer::opGetPrinterAttributes(const ipp::Request &req, const PrinterRecord &printer,
                                        const std::string &uri, ipp::Writer &w)
 {
-    const std::vector<std::string> requested = req.getStrings("requested-attributes");
-    const bool all = requested.empty() ||
+    const auto requested = req.getStrings("requested-attributes");
+    const auto all = requested.empty() ||
                      std::any_of(requested.begin(), requested.end(), [](const std::string &s) {
                          return s == "all" || s == "printer-description" || s == "job-template";
                      });
@@ -844,10 +844,10 @@ void IppServer::opGetPrinterAttributes(const ipp::Request &req, const PrinterRec
     const PrinterProfile *profile = PrinterProfiles::findByName(printer.profileName);
     if (!profile)
         profile = &PrinterProfiles::defaultProfile();
-    const bool busy = jobs_->printerBusy(printer.mac);
-    const bool accepting = jobs_->pendingCount() < jobs_->capacity();
-    const std::string host = hostWithoutPort(uri.substr(6, uri.find('/', 6) - 6));
-    const uint32_t uptime = PrinterRegistry::nowSeconds();
+    const auto busy = jobs_->printerBusy(printer.mac);
+    const auto accepting = jobs_->pendingCount() < jobs_->capacity();
+    const auto host = hostWithoutPort(uri.substr(6, uri.find('/', 6) - 6));
+    const auto uptime = PrinterRegistry::nowSeconds();
 
     w.group(ipp::TAG_PRINTER);
 
@@ -1042,7 +1042,7 @@ void IppServer::opGetPrinterAttributes(const ipp::Request &req, const PrinterRec
 
 uint16_t IppServer::opValidateJob(const ipp::Request &req, ipp::Writer &w)
 {
-    const std::string format = req.getString("document-format");
+    const auto format = req.getString("document-format");
     if (!formatSupported(format))
     {
         w.group(ipp::TAG_UNSUPPORTED_GROUP);
@@ -1050,7 +1050,7 @@ uint16_t IppServer::opValidateJob(const ipp::Request &req, ipp::Writer &w)
         statusMessage_ = "document format not supported";
         return ipp::CLIENT_ERROR_DOCUMENT_FORMAT_NOT_SUPPORTED;
     }
-    const std::string compression = req.getString("compression", "none");
+    const auto compression = req.getString("compression", "none");
     if (compression != "none")
     {
         w.group(ipp::TAG_UNSUPPORTED_GROUP);
@@ -1075,7 +1075,7 @@ uint16_t IppServer::opPrintJob(const ipp::Request &req, const PrinterRecord &pri
     }
 
     const PrinterProfile *profile = PrinterProfiles::findByName(printer.profileName);
-    const BridgeConfig bridge = config_->bridge();
+    const auto bridge = config_->bridge();
 
     raster::PwgJobConverter::Options options;
     options.width = profile ? profile->printWidthPx : 384;
@@ -1084,14 +1084,14 @@ uint16_t IppServer::opPrintJob(const ipp::Request &req, const PrinterRecord &pri
     raster::PwgJobConverter converter(options);
 
     const uint32_t start = millis();
-    size_t received = leftover.size();
-    bool ok = leftover.empty() || converter.feed(leftover.data(), leftover.size());
+    auto received = leftover.size();
+    auto ok = leftover.empty() || converter.feed(leftover.data(), leftover.size());
     std::vector<uint8_t>().swap(leftover);
 
     uint8_t buf[1024];
     while (ok)
     {
-        const size_t n = body.read(buf, sizeof(buf));
+        const auto n = body.read(buf, sizeof(buf));
         if (!n)
             break;
         received += n;
@@ -1134,7 +1134,7 @@ uint16_t IppServer::opPrintJob(const ipp::Request &req, const PrinterRecord &pri
     }
 
     std::string error;
-    const uint32_t id = jobs_->submit(std::move(job), &error);
+    const auto id = jobs_->submit(std::move(job), &error);
     if (!id)
     {
         statusMessage_ = error;
@@ -1151,7 +1151,7 @@ uint16_t IppServer::opPrintJob(const ipp::Request &req, const PrinterRecord &pri
 void IppServer::writeJobAttributes(ipp::Writer &w, const JobStatus &job, const std::string &printerUri,
                                    const std::vector<std::string> &requested) const
 {
-    const bool all = requested.empty() || std::find(requested.begin(), requested.end(), "all") != requested.end() ||
+    const auto all = requested.empty() || std::find(requested.begin(), requested.end(), "all") != requested.end() ||
                      std::find(requested.begin(), requested.end(), "job-description") != requested.end();
     auto want = [&](const char *name) {
         return all || std::find(requested.begin(), requested.end(), name) != requested.end();
@@ -1201,7 +1201,7 @@ uint16_t IppServer::opGetJobAttributes(const ipp::Request &req, const PrinterRec
                                        const std::string &uri, ipp::Writer &w)
 {
     JobStatus job;
-    const uint32_t id = requestedJobId(req);
+    const auto id = requestedJobId(req);
     if (!id || !jobs_->getStatus(id, job) || job.printerMac != printer.mac)
     {
         statusMessage_ = "job not found";
@@ -1215,7 +1215,7 @@ uint16_t IppServer::opGetJobAttributes(const ipp::Request &req, const PrinterRec
 uint16_t IppServer::opGetJobs(const ipp::Request &req, const PrinterRecord &printer, const std::string &uri,
                               ipp::Writer &w)
 {
-    const std::string which = req.getString("which-jobs", "not-completed");
+    const auto which = req.getString("which-jobs", "not-completed");
     if (which != "completed" && which != "not-completed" && which != "all")
     {
         w.group(ipp::TAG_UNSUPPORTED_GROUP);
@@ -1223,10 +1223,10 @@ uint16_t IppServer::opGetJobs(const ipp::Request &req, const PrinterRecord &prin
         statusMessage_ = "which-jobs value not supported";
         return ipp::CLIENT_ERROR_ATTRIBUTES_OR_VALUES_NOT_SUPPORTED;
     }
-    std::vector<std::string> requested = req.getStrings("requested-attributes");
+    auto requested = req.getStrings("requested-attributes");
     if (requested.empty())
         requested = {"job-id", "job-uri"};
-    const int32_t limit = req.getInt("limit", 0);
+    const auto limit = req.getInt("limit", 0);
 
     int32_t count = 0;
     auto jobs = jobs_->list();
@@ -1235,7 +1235,7 @@ uint16_t IppServer::opGetJobs(const ipp::Request &req, const PrinterRecord &prin
     {
         if (it->printerMac != printer.mac)
             continue;
-        const bool finished = it->finished();
+        const auto finished = it->finished();
         if ((which == "completed" && !finished) || (which == "not-completed" && finished))
             continue;
         if (limit > 0 && count >= limit)
@@ -1250,7 +1250,7 @@ uint16_t IppServer::opGetJobs(const ipp::Request &req, const PrinterRecord &prin
 uint16_t IppServer::opCancelJob(const ipp::Request &req, const PrinterRecord &printer)
 {
     JobStatus job;
-    const uint32_t id = requestedJobId(req);
+    const auto id = requestedJobId(req);
     if (!id || !jobs_->getStatus(id, job) || job.printerMac != printer.mac)
     {
         statusMessage_ = "job not found";

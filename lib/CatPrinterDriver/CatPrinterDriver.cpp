@@ -82,7 +82,7 @@ bool CatPrinterDriver::connect(const std::string &mac, uint8_t addrType, const P
         return fail(Error::UnsupportedProtocol);
     }
 
-    const LogLevel progressLevel = options_.verbose ? LogLevel::Info : LogLevel::Debug;
+    const auto progressLevel = options_.verbose ? LogLevel::Info : LogLevel::Debug;
     bool connected = false;
     for (uint8_t attempt = 1; attempt <= options_.connectAttempts && !connected; ++attempt)
     {
@@ -185,7 +185,7 @@ bool CatPrinterDriver::discoverCharacteristics()
 
     if (notifyChar_ && (notifyChar_->canNotify() || notifyChar_->canIndicate()))
     {
-        const bool ok = notifyChar_->subscribe(
+        const auto ok = notifyChar_->subscribe(
             notifyChar_->canNotify(),
             [this](NimBLERemoteCharacteristic *, uint8_t *data, size_t len, bool) {
                 if (!encoder_)
@@ -249,7 +249,7 @@ bool CatPrinterDriver::waitWhilePaused()
 {
     if (!paused_)
         return true;
-    const TickType_t start = xTaskGetTickCount();
+    const auto start = xTaskGetTickCount();
     while (paused_)
     {
         if (!isConnected())
@@ -287,7 +287,7 @@ bool CatPrinterDriver::sendRaw(const uint8_t *data, size_t len)
     if (!isConnected() || !writeChar_)
         return fail(Error::NotConnected);
 
-    const uint16_t currentMtu = mtu();
+    const auto currentMtu = mtu();
     size_t chunk = options_.chunkSize ? options_.chunkSize : 20;
     if (currentMtu > 3 && chunk > static_cast<size_t>(currentMtu - 3))
         chunk = currentMtu - 3;
@@ -295,13 +295,13 @@ bool CatPrinterDriver::sendRaw(const uint8_t *data, size_t len)
         chunk = 20;
 
     // Older saved settings used 4 ms, which can overrun the printer's receive buffer.
-    const uint32_t packetDelayMs = std::max<uint32_t>(20, options_.packetDelayMs);
+    const auto packetDelayMs = std::max<uint32_t>(20, options_.packetDelayMs);
     size_t offset = 0;
     while (offset < len)
     {
         if (!waitWhilePaused())
             return false;
-        const size_t n = (len - offset) < chunk ? (len - offset) : chunk;
+        const auto n = (len - offset) < chunk ? (len - offset) : chunk;
         if (!writeChunk(data + offset, n))
         {
             LOG_W(TAG, "%s: %s after %u/%u bytes", mac_.c_str(), errorString(error_), static_cast<unsigned>(offset),
@@ -318,7 +318,7 @@ bool CatPrinterDriver::flush(std::vector<uint8_t> &buffer)
 {
     if (buffer.empty())
         return true;
-    const bool ok = sendRaw(buffer.data(), buffer.size());
+    const auto ok = sendRaw(buffer.data(), buffer.size());
     buffer.clear();
     return ok;
 }
@@ -333,7 +333,7 @@ bool CatPrinterDriver::printBitmap(const raster::MonoBitmap &bitmap, const catgf
     buffer.reserve(kStreamBufferBytes + 128);
 
     encoder_->beginJob(buffer, settings);
-    const size_t rowBytes = bitmap.rowBytes();
+    const auto rowBytes = bitmap.rowBytes();
     for (uint32_t y = 0; y < bitmap.height; ++y)
     {
         encoder_->bitmapRow(buffer, bitmap.row(y), rowBytes);
@@ -358,7 +358,7 @@ bool CatPrinterDriver::printBitmap(const raster::MonoBitmap &bitmap, const catgf
 
     // Allow the printer to drain its buffer before the caller disconnects;
     // some models drop queued rows when the link closes too early.
-    const uint32_t drainMs = 300 + bitmap.height / 4;
+    const auto drainMs = 300 + bitmap.height / 4;
     vTaskDelay(pdMS_TO_TICKS(drainMs > 3000 ? 3000 : drainMs));
     return true;
 }
@@ -388,7 +388,7 @@ bool CatPrinterDriver::identify(const std::string &displayName, const std::strin
                                 const catgfx::PrintSettings &settings)
 {
     const uint16_t width = profile_ ? profile_->printWidthPx : 384;
-    raster::MonoBitmap page = raster::buildIdentifyPage(displayName, mac, width);
+    auto page = raster::buildIdentifyPage(displayName, mac, width);
     // Step 2: print "CAT PRINTER IDENTIFY"; step 3: feed 20 mm.
     if (!printBitmap(page, settings, 0))
         return false;

@@ -59,12 +59,12 @@ bool MdnsPublisher::healthy() const
 std::string MdnsPublisher::uniqueInstanceName(const Entry &entry,
                                               const std::map<std::string, std::string> &taken) const
 {
-    std::string base = entry.name.substr(0, kMaxInstanceLen);
-    std::string candidate = base;
+    auto base = entry.name.substr(0, kMaxInstanceLen);
+    auto candidate = base;
     if (taken.count(candidate))
     {
         // Duplicate alias: disambiguate with the end of the MAC/id.
-        const std::string suffix = " (" + entry.id.substr(entry.id.size() >= 4 ? entry.id.size() - 4 : 0) + ")";
+        const auto suffix = " (" + entry.id.substr(entry.id.size() >= 4 ? entry.id.size() - 4 : 0) + ")";
         candidate = base.substr(0, kMaxInstanceLen - suffix.size()) + suffix;
     }
     return candidate;
@@ -86,7 +86,7 @@ void MdnsPublisher::sync(const std::vector<Entry> &wanted)
             LOG_W(TAG, "mDNS service limit reached, %s not advertised (still reachable by URI)", e.id.c_str());
             continue;
         }
-        const std::string instance = uniqueInstanceName(e, taken);
+        const auto instance = uniqueInstanceName(e, taken);
         taken[instance] = e.id;
         desired[e.id] = {instance, &e};
     }
@@ -95,7 +95,7 @@ void MdnsPublisher::sync(const std::vector<Entry> &wanted)
     for (auto it = published_.begin(); it != published_.end();)
     {
         auto d = desired.find(it->first);
-        const bool keep = d != desired.end() && d->second.first == it->second.instance &&
+        const auto keep = d != desired.end() && d->second.first == it->second.instance &&
                           d->second.second->uuid == it->second.entry.uuid &&
                           d->second.second->model == it->second.entry.model &&
                           d->second.second->location == it->second.entry.location;
@@ -120,9 +120,9 @@ void MdnsPublisher::sync(const std::vector<Entry> &wanted)
 
 bool MdnsPublisher::publish(const Entry &entry, const std::string &instance)
 {
-    const std::string rp = "ipp/" + entry.id;
-    const std::string adminurl = "http://" + hostname_ + ".local/";
-    const std::string product = "(" + entry.model + ")";
+    const auto rp = "ipp/" + entry.id;
+    const auto adminurl = "http://" + hostname_ + ".local/";
+    const auto product = "(" + entry.model + ")";
 
     // IPP Everywhere / Bonjour Printing TXT keys, plus the AirPrint keys (URF, air)
     // without which iOS does not list the printer.
@@ -143,9 +143,9 @@ bool MdnsPublisher::publish(const Entry &entry, const std::string &instance)
         {"priority", "50"},
         {"UUID", entry.uuid.c_str()},
     };
-    const size_t count = sizeof(txt) / sizeof(txt[0]);
+    const auto count = sizeof(txt) / sizeof(txt[0]);
 
-    esp_err_t err = mdns_service_add_for_host(instance.c_str(), "_ipp", "_tcp", nullptr, ippPort_, txt, count);
+    auto err = mdns_service_add_for_host(instance.c_str(), "_ipp", "_tcp", nullptr, ippPort_, txt, count);
     if (err != ESP_OK)
     {
         LOG_E(TAG, "Advertising '%s' failed: %s", instance.c_str(), esp_err_to_name(err));
@@ -164,7 +164,7 @@ bool MdnsPublisher::publish(const Entry &entry, const std::string &instance)
 
 void MdnsPublisher::unpublish(const std::string &instance)
 {
-    const esp_err_t err = mdns_service_remove_for_host(instance.c_str(), "_ipp", "_tcp", nullptr);
+    const auto err = mdns_service_remove_for_host(instance.c_str(), "_ipp", "_tcp", nullptr);
     if (err != ESP_OK && err != ESP_ERR_NOT_FOUND)
         LOG_W(TAG, "Removing '%s' failed: %s", instance.c_str(), esp_err_to_name(err));
     else

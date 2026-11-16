@@ -27,7 +27,7 @@ namespace
     {
         std::vector<std::string> keys;
         nvs_iterator_t it = nullptr;
-        esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, ns, NVS_TYPE_STR, &it);
+        auto err = nvs_entry_find(NVS_DEFAULT_PART_NAME, ns, NVS_TYPE_STR, &it);
         while (err == ESP_OK)
         {
             nvs_entry_info_t info;
@@ -54,10 +54,10 @@ namespace
 
     bool decodeKnown(const std::string &mac, const std::string &value, KnownPrinter &out)
     {
-        size_t a = value.find(';');
+        auto a = value.find(';');
         if (a == std::string::npos)
             return false;
-        size_t b = value.find(';', a + 1);
+        auto b = value.find(';', a + 1);
         if (b == std::string::npos)
             return false;
         out.mac = mac;
@@ -72,7 +72,7 @@ bool ConfigManager::begin()
 {
     // Preferences initialises NVS on first use; make sure a corrupted or
     // outdated partition is recovered instead of failing silently.
-    esp_err_t err = nvs_flash_init();
+    auto err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
         LOG_W(TAG, "NVS partition needs erase (%d), resetting configuration", err);
@@ -152,7 +152,7 @@ void ConfigManager::loadAll()
     {
         for (const auto &key : listStringKeys(NS_ALIAS))
         {
-            std::string mac = macutil::normalize(key);
+            auto mac = macutil::normalize(key);
             if (!mac.empty())
                 aliases_[mac] = getString(p, key.c_str(), "");
         }
@@ -240,7 +240,7 @@ std::string ConfigManager::alias(const std::string &mac) const
 
 bool ConfigManager::setAlias(const std::string &mac, const std::string &alias)
 {
-    std::string key = macutil::toId(mac);
+    auto key = macutil::toId(mac);
     RtosLock lock(mutex_);
     Preferences p;
     if (!p.begin(NS_ALIAS, false))
@@ -268,7 +268,7 @@ std::map<std::string, KnownPrinter> ConfigManager::knownPrinters() const
         return out;
     for (const auto &key : listStringKeys(NS_KNOWN))
     {
-        std::string mac = macutil::normalize(key);
+        auto mac = macutil::normalize(key);
         KnownPrinter k;
         if (!mac.empty() && decodeKnown(mac, getString(p, key.c_str(), ""), k))
             out[mac] = k;
@@ -279,14 +279,14 @@ std::map<std::string, KnownPrinter> ConfigManager::knownPrinters() const
 
 bool ConfigManager::saveKnownPrinter(const KnownPrinter &printer)
 {
-    std::string key = macutil::toId(printer.mac);
-    std::string value = encodeKnown(printer);
+    auto key = macutil::toId(printer.mac);
+    auto value = encodeKnown(printer);
     RtosLock lock(mutex_);
     Preferences p;
     if (!p.begin(NS_KNOWN, false))
         return false;
     // Avoid flash wear: only write when the value actually changed.
-    bool ok = true;
+    auto ok = true;
     if (getString(p, key.c_str(), "") != value)
         ok = p.putString(key.c_str(), value.c_str()) > 0;
     p.end();
@@ -295,7 +295,7 @@ bool ConfigManager::saveKnownPrinter(const KnownPrinter &printer)
 
 bool ConfigManager::removeKnownPrinter(const std::string &mac)
 {
-    std::string key = macutil::toId(mac);
+    auto key = macutil::toId(mac);
     RtosLock lock(mutex_);
     Preferences p;
     if (!p.begin(NS_KNOWN, false))

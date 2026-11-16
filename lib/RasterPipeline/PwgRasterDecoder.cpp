@@ -50,7 +50,7 @@ namespace raster
 
     void toGray(const PwgPageHeader &h, const uint8_t *line, uint8_t *gray)
     {
-        const uint32_t w = h.width;
+        const auto w = h.width;
         if (isGraySpace(h.colorSpace))
         {
             const bool inkIsOne = h.colorSpace == CSPACE_K; // K: 1/255 = black; W/sW: 255 = white
@@ -64,18 +64,18 @@ namespace raster
             }
             else
             {
-                const uint32_t step = h.bitsPerColor / 8; // 1 or 2 (big endian, use MSB)
+                const auto step = h.bitsPerColor / 8; // 1 or 2 (big endian, use MSB)
                 for (uint32_t x = 0; x < w; ++x)
                 {
-                    const uint8_t v = line[x * step];
+                    const auto v = line[x * step];
                     gray[x] = inkIsOne ? static_cast<uint8_t>(255 - v) : v;
                 }
             }
         }
         else
         {
-            const uint32_t step = h.bitsPerColor / 8; // bytes per component
-            const uint32_t px = step * 3;
+            const auto step = h.bitsPerColor / 8; // bytes per component
+            const auto px = step * 3;
             for (uint32_t x = 0; x < w; ++x)
             {
                 const uint8_t *p = line + x * px;
@@ -119,7 +119,7 @@ namespace raster
             static const uint32_t kSpaces[] = {CSPACE_SW, CSPACE_SRGB, kUnsupported /* CIE Lab */, CSPACE_ADOBE_RGB,
                                                CSPACE_W,  CSPACE_RGB,  kUnsupported /* CMYK */};
             static const uint32_t kColors[] = {1, 3, 3, 3, 1, 3, 4};
-            const uint8_t cs = h[1];
+            const auto cs = h[1];
             const bool known = cs < sizeof(kColors) / sizeof(kColors[0]);
             p.bitsPerPixel = h[0];
             p.colorSpace = known ? kSpaces[cs] : kUnsupported;
@@ -168,10 +168,10 @@ namespace raster
 
     void PwgRasterDecoder::writeRepeat(uint32_t count)
     {
-        const uint32_t total = page_.bytesPerLine;
+        const auto total = page_.bytesPerLine;
         for (uint32_t i = 0; i < count && linePos_ < total; ++i)
         {
-            const uint32_t n = std::min(unitBytes_, total - linePos_);
+            const auto n = std::min(unitBytes_, total - linePos_);
             memcpy(&line_buf_[linePos_], pixel_, n);
             linePos_ += n;
         }
@@ -180,7 +180,7 @@ namespace raster
     bool PwgRasterDecoder::lineComplete()
     {
         // Deliver the line (plus repeats), then advance to next line or page.
-        const uint32_t copies = std::min(lineRepeat_, page_.height - y_);
+        const auto copies = std::min(lineRepeat_, page_.height - y_);
         for (uint32_t i = 0; i < copies; ++i)
         {
             if (line_)
@@ -216,7 +216,7 @@ namespace raster
             {
                 static const uint8_t kPwgSync[4] = {'R', 'a', 'S', '2'};
                 static const uint8_t kUrfSync[8] = {'U', 'N', 'I', 'R', 'A', 'S', 'T', '\0'};
-                const uint8_t c = data[i++];
+                const auto c = data[i++];
                 if (syncPos_ == 0)
                     format_ = c == 'U' ? Format::Urf : Format::Pwg;
                 if (format_ == Format::Pwg)
@@ -245,8 +245,8 @@ namespace raster
 
             case State::Header:
             {
-                const size_t need = headerSize() - header_.size();
-                const size_t take = std::min(need, len - i);
+                const auto need = headerSize() - header_.size();
+                const auto take = std::min(need, len - i);
                 header_.insert(header_.end(), data + i, data + i + take);
                 i += take;
                 if (header_.size() == headerSize() && !parseHeader())
@@ -262,7 +262,7 @@ namespace raster
 
             case State::Control:
             {
-                const uint8_t c = data[i++];
+                const auto c = data[i++];
                 if (c == 128 && format_ == Format::Urf)
                 {
                     // Fill the rest of the line with white.
@@ -301,8 +301,8 @@ namespace raster
 
             case State::Literal:
             {
-                const uint32_t room = page_.bytesPerLine - linePos_;
-                const size_t take = std::min<size_t>(std::min<size_t>(literalRemaining_, len - i), room);
+                const auto room = page_.bytesPerLine - linePos_;
+                const auto take = std::min<size_t>(std::min<size_t>(literalRemaining_, len - i), room);
                 if (take == 0)
                     return fail("literal run exceeds line");
                 memcpy(&line_buf_[linePos_], data + i, take);

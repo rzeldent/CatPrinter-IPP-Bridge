@@ -102,7 +102,7 @@ namespace
     std::string sanitizeAlias(const std::string &in)
     {
         std::string out;
-        for (char c : in)
+        for (auto c : in)
         {
             if (static_cast<unsigned char>(c) < 0x20 || c == 0x7F)
                 continue;
@@ -110,7 +110,7 @@ namespace
         }
         while (!out.empty() && out.back() == ' ')
             out.pop_back();
-        size_t start = out.find_first_not_of(' ');
+        auto start = out.find_first_not_of(' ');
         out = start == std::string::npos ? std::string() : out.substr(start);
         if (out.size() > kMaxAliasLen)
         {
@@ -128,7 +128,7 @@ namespace
     {
         if (h.empty() || h.size() > 32 || h.front() == '-' || h.back() == '-')
             return false;
-        for (char c : h)
+        for (auto c : h)
             if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-'))
                 return false;
         return true;
@@ -146,13 +146,13 @@ namespace
     /** Wall clock time if NTP synchronised, else 0. */
     time_t wallClock()
     {
-        const time_t now = time(nullptr);
+        const auto now = time(nullptr);
         return now > 1700000000 ? now : 0;
     }
 
     void printerToJson(JsonObject o, const PrinterRecord &r, IppServer *ipp, JobQueue *jobs)
     {
-        const uint32_t now = PrinterRegistry::nowSeconds();
+        const auto now = PrinterRegistry::nowSeconds();
         o["mac"] = r.mac;
         o["id"] = r.id;
         o["alias"] = r.alias;
@@ -162,7 +162,7 @@ namespace
         o["online"] = r.online;
         o["lastSeen"] = r.lastSeen;
         o["lastSeenAgo"] = r.lastSeen ? static_cast<int32_t>(now - r.lastSeen) : -1;
-        const time_t wall = wallClock();
+        const auto wall = wallClock();
         if (wall && r.lastSeen)
             o["lastSeenEpoch"] = static_cast<uint32_t>(wall - (now - r.lastSeen));
         o["firstSeen"] = r.firstSeen;
@@ -198,7 +198,7 @@ namespace
         std::string rest = url.c_str() + strlen(prefix);
         while (!rest.empty() && rest.back() == '/')
             rest.pop_back();
-        const size_t slash = rest.find('/');
+        const auto slash = rest.find('/');
         key = rest.substr(0, slash);
         action = slash == std::string::npos ? std::string() : rest.substr(slash + 1);
     }
@@ -330,7 +330,7 @@ void WebUI::handlePrinters(AsyncWebServerRequest *request)
 {
     SystemStats::instance().httpRequests++;
     JsonDocument doc;
-    JsonArray arr = doc.to<JsonArray>();
+    auto arr = doc.to<JsonArray>();
     for (const PrinterRecord &r : ctx_.registry->list())
         printerToJson(arr.add<JsonObject>(), r, ctx_.ipp, ctx_.jobs);
     sendJson(request, 200, doc);
@@ -349,7 +349,7 @@ void WebUI::handlePrinterRoute(AsyncWebServerRequest *request)
         return;
     }
 
-    const WebRequestMethod method = request->method();
+    const auto method = request->method();
 
     if (action.empty())
     {
@@ -447,7 +447,7 @@ void WebUI::handleJobs(AsyncWebServerRequest *request)
 {
     SystemStats::instance().httpRequests++;
     JsonDocument doc;
-    JsonArray arr = doc.to<JsonArray>();
+    auto arr = doc.to<JsonArray>();
     const auto jobs = ctx_.jobs->list();
     for (auto it = jobs.rbegin(); it != jobs.rend(); ++it)
         jobToJson(arr.add<JsonObject>(), *it);
@@ -459,7 +459,7 @@ void WebUI::handleJobRoute(AsyncWebServerRequest *request)
     SystemStats::instance().httpRequests++;
     std::string key, action;
     splitRoute(request->url(), "/api/jobs/", key, action);
-    const uint32_t id = static_cast<uint32_t>(strtoul(key.c_str(), nullptr, 10));
+    const auto id = static_cast<uint32_t>(strtoul(key.c_str(), nullptr, 10));
     JobStatus status;
     if (!id || !ctx_.jobs->getStatus(id, status))
     {
@@ -488,8 +488,8 @@ void WebUI::handleJobRoute(AsyncWebServerRequest *request)
 // ===========================================================================
 JsonDocument WebUI::statsDocument() const
 {
-    SystemStats &st = SystemStats::instance();
-    const uint32_t uptime = PrinterRegistry::nowSeconds();
+    auto &st = SystemStats::instance();
+    const auto uptime = PrinterRegistry::nowSeconds();
 
     JsonDocument doc;
     // Contract fields (string values as specified).
@@ -500,7 +500,7 @@ JsonDocument WebUI::statsDocument() const
     doc["jobsFailed"] = std::to_string(st.jobsFailed.load());
 
     // Extended numeric details.
-    JsonObject d = doc["details"].to<JsonObject>();
+    auto d = doc["details"].to<JsonObject>();
     d["firmware"] = CATBRIDGE_VERSION;
     d["uptimeSeconds"] = uptime;
     d["heapFree"] = ESP.getFreeHeap();
@@ -543,7 +543,7 @@ JsonDocument WebUI::statsDocument() const
 void WebUI::handleStats(AsyncWebServerRequest *request)
 {
     SystemStats::instance().httpRequests++;
-    const JsonDocument doc = statsDocument();
+    const auto doc = statsDocument();
     if (doc.overflowed())
     {
         sendError(request, 503, "not enough memory for statistics");
@@ -556,7 +556,7 @@ void WebUI::handleLogs(AsyncWebServerRequest *request)
 {
     SystemStats::instance().httpRequests++;
     JsonDocument doc;
-    JsonArray arr = doc.to<JsonArray>();
+    auto arr = doc.to<JsonArray>();
     if (ctx_.logs)
         for (const auto &line : ctx_.logs->snapshot())
             arr.add(line);
@@ -569,12 +569,12 @@ void WebUI::handleLogs(AsyncWebServerRequest *request)
 void WebUI::handleGetConfig(AsyncWebServerRequest *request)
 {
     SystemStats::instance().httpRequests++;
-    const BridgeConfig b = ctx_.config->bridge();
-    const ProtocolConfig p = ctx_.config->protocol();
-    const NetworkConfig n = ctx_.config->network();
+    const auto b = ctx_.config->bridge();
+    const auto p = ctx_.config->protocol();
+    const auto n = ctx_.config->network();
 
     JsonDocument doc;
-    JsonObject jb = doc["bridge"].to<JsonObject>();
+    auto jb = doc["bridge"].to<JsonObject>();
     jb["scanIntervalSec"] = b.scanIntervalSec;
     jb["scanDurationSec"] = b.scanDurationSec;
     jb["offlineTimeoutSec"] = b.offlineTimeoutSec;
@@ -586,14 +586,14 @@ void WebUI::handleGetConfig(AsyncWebServerRequest *request)
     jb["keepAlive"] = b.keepAlive;
     jb["keepAliveIntervalSec"] = b.keepAliveIntervalSec;
 
-    JsonObject jp = doc["protocol"].to<JsonObject>();
+    auto jp = doc["protocol"].to<JsonObject>();
     jp["energy"] = p.energy;
     jp["speed"] = p.speed;
     jp["feedAfterJobLines"] = p.feedAfterJobLines;
     jp["chunkSize"] = p.chunkSize;
     jp["packetDelayMs"] = p.packetDelayMs;
 
-    JsonObject jn = doc["network"].to<JsonObject>();
+    auto jn = doc["network"].to<JsonObject>();
     jn["ssid"] = n.ssid;
     jn["passwordSet"] = !n.password.empty();
     jn["hostname"] = n.hostname;
@@ -611,8 +611,8 @@ void WebUI::handlePostConfig(AsyncWebServerRequest *request)
         return;
     }
 
-    BridgeConfig b = ctx_.config->bridge();
-    ProtocolConfig p = ctx_.config->protocol();
+    auto b = ctx_.config->bridge();
+    auto p = ctx_.config->protocol();
     std::string error;
 
     // Range checked assignment helper.
@@ -637,7 +637,7 @@ void WebUI::handlePostConfig(AsyncWebServerRequest *request)
         field = v.as<bool>();
     };
 
-    JsonVariantConst jb = body["bridge"];
+    auto jb = body["bridge"];
     take(jb["scanIntervalSec"], "scanIntervalSec", 10, 3600, b.scanIntervalSec);
     take(jb["scanDurationSec"], "scanDurationSec", 1, 30, b.scanDurationSec);
     take(jb["offlineTimeoutSec"], "offlineTimeoutSec", 30, 86400, b.offlineTimeoutSec);
@@ -649,7 +649,7 @@ void WebUI::handlePostConfig(AsyncWebServerRequest *request)
     takeBool(jb["keepAlive"], "keepAlive", b.keepAlive);
     take(jb["keepAliveIntervalSec"], "keepAliveIntervalSec", 30, 3600, b.keepAliveIntervalSec);
 
-    JsonVariantConst jp = body["protocol"];
+    auto jp = body["protocol"];
     take(jp["energy"], "energy", 0, 0xFFFF, p.energy);
     take(jp["speed"], "speed", 1, 255, p.speed);
     take(jp["feedAfterJobLines"], "feedAfterJobLines", 0, 800, p.feedAfterJobLines);
@@ -684,7 +684,7 @@ void WebUI::handlePostNetwork(AsyncWebServerRequest *request)
         sendError(request, 400, "invalid JSON");
         return;
     }
-    NetworkConfig n = ctx_.config->network();
+    auto n = ctx_.config->network();
     if (body["ssid"].is<const char *>())
     {
         const std::string ssid = body["ssid"].as<const char *>();
@@ -799,7 +799,7 @@ void WebUI::run()
             lastStats = millis();
             if (events_->count() > 0)
             {
-                const JsonDocument doc = statsDocument();
+                const auto doc = statsDocument();
                 if (doc.overflowed())
                     LOG_W(TAG, "Not enough memory for statistics event");
                 else

@@ -24,7 +24,7 @@ namespace macutil
     {
         std::string hex;
         hex.reserve(12);
-        for (char c : in)
+        for (auto c : in)
         {
             if (c == ':' || c == '-')
                 continue;
@@ -50,7 +50,7 @@ namespace macutil
     {
         std::string id;
         id.reserve(12);
-        for (char c : mac)
+        for (auto c : mac)
             if (c != ':')
                 id.push_back(c);
         return id;
@@ -59,8 +59,8 @@ namespace macutil
     /** Last two bytes of the MAC in upper case, used for default names ("EEFF"). */
     inline std::string shortSuffix(const std::string &mac)
     {
-        std::string id = toId(mac);
-        std::string s = id.size() >= 4 ? id.substr(id.size() - 4) : id;
+        auto id = toId(mac);
+        auto s = id.size() >= 4 ? id.substr(id.size() - 4) : id;
         for (auto &c : s)
             c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
         return s;

@@ -128,10 +128,10 @@ void BleDiscovery::run()
 int BleDiscovery::matchAdvertisement(const NimBLEAdvertisedDevice *device) const
 {
     const auto &profiles = PrinterProfiles::all();
-    const uint8_t count = device->getServiceUUIDCount();
+    const auto count = device->getServiceUUIDCount();
     for (uint8_t i = 0; i < count; ++i)
     {
-        const NimBLEUUID uuid = device->getServiceUUID(i);
+        const auto uuid = device->getServiceUUID(i);
         const PrinterProfile *profile = PrinterProfiles::matchService(uuid);
         if (profile)
             return static_cast<int>(profile - profiles.data());
@@ -144,9 +144,9 @@ bool BleDiscovery::hasCompleteUuidList(const NimBLEAdvertisedDevice *device)
     // A device advertising a *complete* list that does not contain a known
     // UUID is definitively not a Cat Printer. Incomplete lists (or no list at
     // all) leave room for a hidden print service.
-    const bool complete = device->haveType(AD_COMPLETE_16) || device->haveType(AD_COMPLETE_32) ||
+    const auto complete = device->haveType(AD_COMPLETE_16) || device->haveType(AD_COMPLETE_32) ||
                           device->haveType(AD_COMPLETE_128);
-    const bool incomplete = device->haveType(AD_INCOMPLETE_16) || device->haveType(AD_INCOMPLETE_32) ||
+    const auto incomplete = device->haveType(AD_INCOMPLETE_16) || device->haveType(AD_INCOMPLETE_32) ||
                             device->haveType(AD_INCOMPLETE_128);
     return complete && !incomplete;
 }
@@ -158,23 +158,23 @@ void BleDiscovery::scanOnce()
     LOG_D(TAG, "Active scan for %lu ms", static_cast<unsigned long>(settings_.scanDurationMs));
 
     // Blocking scan: returns after the window elapsed.
-    NimBLEScanResults results = scan->getResults(settings_.scanDurationMs, false);
+    auto results = scan->getResults(settings_.scanDurationMs, false);
     scanning_ = false;
     watchdog::feed();
 
     uint32_t matches = 0;
     std::vector<ProbeCandidate> candidates;
-    const int count = results.getCount();
+    const auto count = results.getCount();
     for (int i = 0; i < count; ++i)
     {
         const NimBLEAdvertisedDevice *device = results.getDevice(i);
         if (!device)
             continue;
-        const std::string mac = macutil::normalize(device->getAddress().toString());
+        const auto mac = macutil::normalize(device->getAddress().toString());
         if (mac.empty())
             continue;
 
-        const int profileIndex = matchAdvertisement(device);
+        const auto profileIndex = matchAdvertisement(device);
         if (profileIndex >= 0)
         {
             ++matches;
@@ -200,7 +200,7 @@ void BleDiscovery::scanOnce()
             if (probes++ >= settings_.maxProbesPerCycle)
                 break;
             watchdog::feed();
-            const int profileIndex = probe(c);
+            const auto profileIndex = probe(c);
             if (profileIndex >= 0)
             {
                 ++matches;
