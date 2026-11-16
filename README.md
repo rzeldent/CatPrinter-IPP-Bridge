@@ -45,6 +45,30 @@ address) to view the live status dashboard.
 - A 2.4 GHz Wi-Fi network and a computer or phone on the same network.
 - [PlatformIO](https://platformio.org/install) to build and upload the firmware.
 
+### Board selection and memory experience
+
+The bridge needs Wi-Fi and Bluetooth Low Energy **at the same time**, with
+enough RAM left for the web dashboard, IPP server, queued jobs, and raster
+conversion. A board that supports BLE is not necessarily large enough to run
+the complete bridge reliably.
+
+| Board | Suitability for this project |
+| --- | --- |
+| **ESP32-S3 with octal PSRAM** | Supported target. An **N16R8** board (16 MB flash, 8 MB PSRAM) matches the supplied firmware configuration. |
+| **ESP32-C3** | Not enough memory for this project's combined networking, BLE, and printing workload. It has Wi-Fi and BLE, but is not a supported target. |
+| **ESP32-S2** | No Bluetooth hardware, so it cannot communicate with the BLE printers, even if the board has PSRAM. |
+| **ESP32-S3 without PSRAM** | Not supported. The firmware checks for PSRAM at startup and stops if it is unavailable. |
+
+PSRAM provides space for large job and image buffers; it does not replace all
+internal RAM needed by Wi-Fi, BLE, and task stacks. The firmware currently
+limits an incoming IPP document and the total queued job payloads to 2 MiB
+each. Extra flash storage is not a substitute for RAM.
+
+Check the actual module specification before buying: not every ESP32-S3 board
+includes PSRAM. The supplied build uses **octal PSRAM and a 16 MB flash
+partition layout**; boards with different memory sizes or PSRAM types need
+matching build settings rather than the unmodified firmware.
+
 ## Build and flash
 
 Connect the ESP32 by USB and run this command from the project
@@ -64,6 +88,18 @@ specify its serial port with `--upload-port`.
 Every push runs a GitHub Actions build for `esp32s3-psram`. Successful runs
 provide an `esp32s3-psram` artifact containing `firmware.bin` and `firmware.elf`
 on the workflow run's summary page.
+
+### Create a release
+
+In GitHub, open **Actions > Create release > Run workflow**, select the source
+branch, and enter a new tag such as `v1.0.0`. The workflow builds the
+`esp32s3-psram` firmware, creates an annotated tag on the selected commit, and
+publishes a GitHub Release with generated release notes, `firmware.bin`, and
+`firmware.elf`. GitHub also provides source archives for the tag. Existing tags
+are rejected, and the source is tagged only after the build succeeds.
+
+The workflow must be present on the default branch before it can be run
+manually.
 
 ## Connect to Wi-Fi
 
