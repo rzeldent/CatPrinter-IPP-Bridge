@@ -13,6 +13,8 @@
  * |               | probe, q_size,     | Probe unknown devices, queue size,        |
  * |               | retries, log_lvl,  | job retries, log level                    |
  * |               | trim               | Trim blank rows from rasterised pages     |
+ * |               | keep_alive,        | Keep printers awake, keep-alive interval  |
+ * |               | keep_int           | (seconds)                                 |
  * | cb_proto      | energy, speed,     | Print density / motor speed,              |
  * |               | feed, chunk,       | feed after job, BLE write chunk size,     |
  * |               | delay              | inter-packet delay (future CatGFX knobs)  |
@@ -51,6 +53,8 @@ struct BridgeConfig
     uint8_t maxRetries = 3;          ///< Attempts per job (1 = no retry)
     uint8_t logLevel = 1;            ///< LogLevel as integer (0=DEBUG .. 3=ERROR)
     bool trimBlankRows = true;       ///< Remove leading/trailing white rows from pages
+    bool keepAlive = false;          ///< Periodically contact online printers so they do not power off
+    uint16_t keepAliveIntervalSec = 120; ///< Time between keep-alive contacts per printer
 };
 
 /**
@@ -62,7 +66,7 @@ struct ProtocolConfig
     uint8_t speed = 32;         ///< Motor speed for bitmap printing (lower = slower = darker)
     uint16_t feedAfterJobLines = 80; ///< Paper feed after every job (8 lines = 1 mm)
     uint16_t chunkSize = 180;   ///< Maximum bytes per BLE write (clamped to MTU-3)
-    uint8_t packetDelayMs = 4;  ///< Delay between BLE writes (flow control for cheap printers)
+    uint8_t packetDelayMs = 20; ///< Delay between BLE writes (driver enforces at least 20 ms)
 };
 
 /** Persisted information about a printer discovered in the past. */

@@ -12,8 +12,9 @@
  *   Get-Printer-Attributes, Print-Job, Validate-Job, Get-Job-Attributes,
  *   Get-Jobs, Cancel-Job, Identify-Printer
  *
- * Document formats: application/pwg-raster and application/octet-stream
- * (auto-detected PWG raster). Documents are converted while they are being
+ * Document formats: image/pwg-raster, image/urf (Apple raster, AirPrint) and
+ * application/octet-stream (auto-detected); the legacy application/pwg-raster
+ * is accepted too. Documents are converted while they are being
  * received (see raster::PwgJobConverter) and handed to the JobQueue as a
  * 1-bit bitmap.
  *

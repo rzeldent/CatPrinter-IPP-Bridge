@@ -126,6 +126,8 @@ void ConfigManager::loadAll()
         bridge_.maxRetries = p.getUChar("retries", bridge_.maxRetries);
         bridge_.logLevel = p.getUChar("log_lvl", bridge_.logLevel);
         bridge_.trimBlankRows = p.getBool("trim", bridge_.trimBlankRows);
+        bridge_.keepAlive = p.getBool("keep_alive", bridge_.keepAlive);
+        bridge_.keepAliveIntervalSec = p.getUShort("keep_int", bridge_.keepAliveIntervalSec);
         p.end();
     }
 
@@ -138,6 +140,11 @@ void ConfigManager::loadAll()
         protocol_.chunkSize = p.getUShort("chunk", protocol_.chunkSize);
         protocol_.packetDelayMs = p.getUChar("delay", protocol_.packetDelayMs);
         p.end();
+    }
+    if (protocol_.packetDelayMs < 20)
+    {
+        LOG_W(TAG, "Raising saved BLE packet delay from %u to 20 ms", protocol_.packetDelayMs);
+        protocol_.packetDelayMs = 20;
     }
 
     aliases_.clear();
@@ -195,6 +202,8 @@ bool ConfigManager::setBridge(const BridgeConfig &cfg)
     p.putUChar("retries", cfg.maxRetries);
     p.putUChar("log_lvl", cfg.logLevel);
     p.putBool("trim", cfg.trimBlankRows);
+    p.putBool("keep_alive", cfg.keepAlive);
+    p.putUShort("keep_int", cfg.keepAliveIntervalSec);
     p.end();
     bridge_ = cfg;
     return true;

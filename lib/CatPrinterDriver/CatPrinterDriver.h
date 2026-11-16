@@ -14,6 +14,8 @@
  *  - connect() is only called by the job worker when a job is processed.
  *  - disconnect() is called immediately after the job (also by the
  *    destructor, so an early return can never leak a connection).
+ *  - With keep-alive enabled the job worker also connects briefly while idle
+ *    and calls ping(), so printers do not power themselves off.
  *  - Sleeping printers frequently ignore the first connection request, so
  *    connect() retries with a delay before giving up.
  *
@@ -61,9 +63,10 @@ public:
         uint32_t connectTimeoutMs = 6000;  ///< Timeout of a single attempt
         uint32_t retryDelayMs = 1500;      ///< Pause between attempts (lets sleeping printers wake)
         uint16_t chunkSize = 180;          ///< Upper bound for a single write (clamped to MTU - 3)
-        uint8_t packetDelayMs = 4;         ///< Delay between writes
-        uint32_t flowPauseTimeoutMs = 8000; ///< Maximum time to wait for a "resume" notification
+        uint8_t packetDelayMs = 20;        ///< Delay between writes (minimum 20 ms)
+        uint32_t flowPauseTimeoutMs = 30000; ///< Maximum time to wait for a "resume" notification
         uint16_t preferredMtu = 247;       ///< MTU requested during connection
+        bool verbose = true;               ///< Log connection progress at INFO (false: DEBUG)
     };
 
     /**
@@ -108,6 +111,12 @@ public:
 
     /** Feed paper by @p lines dot rows (8 rows = 1 mm at 203 dpi). */
     bool feedPaper(uint16_t lines);
+
+    /**
+     * Send a status request without printing anything. Used as keep-alive:
+     * the activity resets the printer's automatic power-off timer.
+     */
+    bool ping();
 
     /**
      * Print the identification page ("CAT PRINTER IDENTIFY", name and MAC)

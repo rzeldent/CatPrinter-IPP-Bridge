@@ -8,6 +8,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include <algorithm>
 #include <vector>
 
 #include "Logging.h"
@@ -81,11 +82,13 @@ bool CatPrinterDriver::connect(const std::string &mac, uint8_t addrType, const P
         return fail(Error::UnsupportedProtocol);
     }
 
+    const LogLevel progressLevel = options_.verbose ? LogLevel::Info : LogLevel::Debug;
     bool connected = false;
     for (uint8_t attempt = 1; attempt <= options_.connectAttempts && !connected; ++attempt)
     {
         watchdog::feed();
-        LOG_I(TAG, "Connecting to %s (attempt %u/%u)", mac.c_str(), attempt, options_.connectAttempts);
+        Logger::instance().log(progressLevel, TAG, "Connecting to %s (attempt %u/%u)", mac.c_str(), attempt,
+                               options_.connectAttempts);
         connected = attemptConnect(mac, addrType);
         if (!connected)
         {
@@ -97,7 +100,8 @@ bool CatPrinterDriver::connect(const std::string &mac, uint8_t addrType, const P
     }
     if (!connected)
     {
-        LOG_W(TAG, "Unable to connect to %s", mac.c_str());
+        Logger::instance().log(options_.verbose ? LogLevel::Warn : LogLevel::Debug, TAG, "Unable to connect to %s",
+                               mac.c_str());
         return fail(Error::ConnectFailed);
     }
 
@@ -107,8 +111,8 @@ bool CatPrinterDriver::connect(const std::string &mac, uint8_t addrType, const P
         return false;
     }
 
-    LOG_I(TAG, "Connected to %s (MTU %u, %s)", mac.c_str(), mtu(),
-          writeWithResponse_ ? "write with response" : "write without response");
+    Logger::instance().log(progressLevel, TAG, "Connected to %s (MTU %u, %s)", mac.c_str(), mtu(),
+                           writeWithResponse_ ? "write with response" : "write without response");
     return true;
 }
 
@@ -191,9 +195,11 @@ bool CatPrinterDriver::discoverCharacteristics()
                 case catgfx::FlowControl::Pause:
                     paused_ = true;
                     flowPauses_++;
+                    LOG_D(TAG, "%s: printer paused transfer", mac_.c_str());
                     break;
                 case catgfx::FlowControl::Resume:
                     paused_ = false;
+                    LOG_D(TAG, "%s: printer resumed transfer", mac_.c_str());
                     break;
                 case catgfx::FlowControl::None:
                     break;
@@ -288,6 +294,8 @@ bool CatPrinterDriver::sendRaw(const uint8_t *data, size_t len)
     if (chunk < 20)
         chunk = 20;
 
+    // Older saved settings used 4 ms, which can overrun the printer's receive buffer.
+    const uint32_t packetDelayMs = std::max<uint32_t>(20, options_.packetDelayMs);
     size_t offset = 0;
     while (offset < len)
     {
@@ -301,10 +309,7 @@ bool CatPrinterDriver::sendRaw(const uint8_t *data, size_t len)
             return false;
         }
         offset += n;
-        if (options_.packetDelayMs)
-            vTaskDelay(pdMS_TO_TICKS(options_.packetDelayMs));
-        else
-            taskYIELD();
+        vTaskDelay(pdMS_TO_TICKS(packetDelayMs));
     }
     return true;
 }
@@ -365,6 +370,18 @@ bool CatPrinterDriver::feedPaper(uint16_t lines)
     std::vector<uint8_t> buffer;
     encoder_->feed(buffer, lines);
     return flush(buffer);
+}
+
+bool CatPrinterDriver::ping()
+{
+    if (!isConnected() || !encoder_)
+        return fail(Error::NotConnected);
+    std::vector<uint8_t> buffer;
+    encoder_->requestStatus(buffer);
+    if (!flush(buffer))
+        return false;
+    vTaskDelay(pdMS_TO_TICKS(200)); // let the printer process the request before the link closes
+    return true;
 }
 
 bool CatPrinterDriver::identify(const std::string &displayName, const std::string &mac,

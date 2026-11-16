@@ -12,6 +12,10 @@
  *                                                  │ release radio lock
  *                                                  └► status table + callbacks
  *
+ * Keep-alive: while the queue is idle and Settings::keepAlive is set, the
+ * worker briefly connects to each online printer every keepAliveIntervalSec
+ * and sends a status request, so printers do not power themselves off.
+ *
  * Memory: a job owns its payload. Bitmap payloads are 1-bit packed rows (48
  * bytes per row at 384 px). On PSRAM boards large allocations are served
  * from PSRAM automatically by the Arduino core. The total number of queued
@@ -28,6 +32,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -113,6 +118,8 @@ public:
         uint32_t retryDelayMs = 3000;     ///< Base delay between attempts (multiplied by attempt)
         size_t maxQueuedBytes = 160 * 1024; ///< Upper bound of payload bytes held by the queue
         size_t historySize = 32;          ///< Finished jobs kept for status queries
+        bool keepAlive = false;           ///< Contact idle online printers so they do not power off
+        uint32_t keepAliveIntervalSec = 120; ///< Time between keep-alive contacts per printer
     };
 
     using Listener = std::function<void(const JobStatus &)>;
@@ -120,7 +127,7 @@ public:
     bool begin(PrinterRegistry *registry, ConfigManager *config, const Settings &settings);
     bool startTask(UBaseType_t priority = 3, BaseType_t core = 1, uint32_t stackSize = 8192);
 
-    /** Update retry settings at run time (queue length is fixed after begin()). */
+    /** Update retry and keep-alive settings at run time (queue length is fixed after begin()). */
     void applySettings(const Settings &settings);
 
     /**
@@ -160,6 +167,7 @@ private:
     void run();
     void process(PrintJob *job);
     bool execute(PrintJob &job, std::string &error, bool &retryable);
+    void keepAliveTick();
     void updateStatus(uint32_t id, const std::function<void(JobStatus &)> &fn);
     void notify(const JobStatus &status);
     void trimHistory();
@@ -176,4 +184,5 @@ private:
     std::atomic<uint32_t> active_{0};
     std::atomic<uint32_t> cancelRequested_{0};
     std::atomic<size_t> queuedBytes_{0};
+    std::map<std::string, uint32_t> keepAliveDue_; ///< Worker task only: MAC -> uptime second of next contact
 };

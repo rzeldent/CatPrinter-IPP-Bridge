@@ -91,6 +91,7 @@ namespace raster
     void PwgRasterDecoder::reset()
     {
         state_ = State::Sync;
+        format_ = Format::Unknown;
         error_.clear();
         header_.clear();
         header_.reserve(kHeaderSize);
@@ -111,17 +112,38 @@ namespace raster
     {
         const uint8_t *h = header_.data();
         PwgPageHeader p;
-        p.hwResolutionX = be32(h + 276);
-        p.hwResolutionY = be32(h + 280);
-        p.width = be32(h + 372);
-        p.height = be32(h + 376);
-        p.bitsPerColor = be32(h + 384);
-        p.bitsPerPixel = be32(h + 388);
-        p.bytesPerLine = be32(h + 392);
-        p.colorOrder = be32(h + 396);
-        p.colorSpace = be32(h + 400);
-        p.numColors = be32(h + 420);
-        p.totalPageCount = be32(h + 452);
+        if (format_ == Format::Urf)
+        {
+            // Apple raster page header: bpp, color space, duplex, quality, ..., width @12, height @16, dpi @20.
+            static constexpr uint32_t kUnsupported = 0xFFFFFFFFu;
+            static const uint32_t kSpaces[] = {CSPACE_SW, CSPACE_SRGB, kUnsupported /* CIE Lab */, CSPACE_ADOBE_RGB,
+                                               CSPACE_W,  CSPACE_RGB,  kUnsupported /* CMYK */};
+            static const uint32_t kColors[] = {1, 3, 3, 3, 1, 3, 4};
+            const uint8_t cs = h[1];
+            const bool known = cs < sizeof(kColors) / sizeof(kColors[0]);
+            p.bitsPerPixel = h[0];
+            p.colorSpace = known ? kSpaces[cs] : kUnsupported;
+            p.numColors = known ? kColors[cs] : 1;
+            p.bitsPerColor = p.bitsPerPixel / p.numColors;
+            p.width = be32(h + 12);
+            p.height = be32(h + 16);
+            p.hwResolutionX = p.hwResolutionY = be32(h + 20);
+            p.bytesPerLine = static_cast<uint32_t>((static_cast<uint64_t>(p.width) * p.bitsPerPixel + 7) / 8);
+        }
+        else
+        {
+            p.hwResolutionX = be32(h + 276);
+            p.hwResolutionY = be32(h + 280);
+            p.width = be32(h + 372);
+            p.height = be32(h + 376);
+            p.bitsPerColor = be32(h + 384);
+            p.bitsPerPixel = be32(h + 388);
+            p.bytesPerLine = be32(h + 392);
+            p.colorOrder = be32(h + 396);
+            p.colorSpace = be32(h + 400);
+            p.numColors = be32(h + 420);
+            p.totalPageCount = be32(h + 452);
+        }
 
         if (p.width == 0 || p.height == 0 || p.width > maxWidth_ || p.height > maxHeight_)
             return fail("page dimensions out of range");
@@ -192,24 +214,42 @@ namespace raster
 
             case State::Sync:
             {
-                static const char kSync[4] = {'R', 'a', 'S', '2'};
-                if (data[i++] != static_cast<uint8_t>(kSync[syncPos_]))
-                    return fail("missing PWG sync word");
-                if (++syncPos_ == 4)
+                static const uint8_t kPwgSync[4] = {'R', 'a', 'S', '2'};
+                static const uint8_t kUrfSync[8] = {'U', 'N', 'I', 'R', 'A', 'S', 'T', '\0'};
+                const uint8_t c = data[i++];
+                if (syncPos_ == 0)
+                    format_ = c == 'U' ? Format::Urf : Format::Pwg;
+                if (format_ == Format::Pwg)
                 {
-                    header_.clear();
-                    state_ = State::Header;
+                    if (c != kPwgSync[syncPos_])
+                        return fail("not a PWG or Apple raster document");
+                    if (++syncPos_ == sizeof(kPwgSync))
+                    {
+                        header_.clear();
+                        state_ = State::Header;
+                    }
+                }
+                else
+                {
+                    // URF: 8 byte sync word followed by a 4 byte page count (not needed).
+                    if (syncPos_ < sizeof(kUrfSync) && c != kUrfSync[syncPos_])
+                        return fail("not a PWG or Apple raster document");
+                    if (++syncPos_ == sizeof(kUrfSync) + 4)
+                    {
+                        header_.clear();
+                        state_ = State::Header;
+                    }
                 }
                 break;
             }
 
             case State::Header:
             {
-                const size_t need = kHeaderSize - header_.size();
+                const size_t need = headerSize() - header_.size();
                 const size_t take = std::min(need, len - i);
                 header_.insert(header_.end(), data + i, data + i + take);
                 i += take;
-                if (header_.size() == kHeaderSize && !parseHeader())
+                if (header_.size() == headerSize() && !parseHeader())
                     return false;
                 break;
             }
@@ -223,7 +263,15 @@ namespace raster
             case State::Control:
             {
                 const uint8_t c = data[i++];
-                if (c < 128)
+                if (c == 128 && format_ == Format::Urf)
+                {
+                    // Fill the rest of the line with white.
+                    const uint8_t white = page_.colorSpace == CSPACE_K ? 0x00 : 0xFF;
+                    memset(&line_buf_[linePos_], white, page_.bytesPerLine - linePos_);
+                    linePos_ = page_.bytesPerLine;
+                    lineComplete();
+                }
+                else if (c < 128)
                 {
                     runCount_ = static_cast<uint32_t>(c) + 1;
                     pixelPos_ = 0;

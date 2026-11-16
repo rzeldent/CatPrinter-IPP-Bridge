@@ -811,7 +811,7 @@ std::vector<uint8_t> IppServer::handleIpp(const HttpRequest &http, BodyReader &b
 bool IppServer::formatSupported(const std::string &format)
 {
     return format.empty() || format == "application/pwg-raster" || format == "application/octet-stream" ||
-           format == "image/pwg-raster";
+           format == "image/pwg-raster" || format == "image/urf";
 }
 
 uint32_t IppServer::requestedJobId(const ipp::Request &req)
@@ -867,7 +867,7 @@ void IppServer::opGetPrinterAttributes(const ipp::Request &req, const PrinterRec
     if (want("printer-make-and-model"))
         w.text("printer-make-and-model", "CatBridge Cat Printer (" + profile->profileName + ")");
     if (want("printer-device-id"))
-        w.text("printer-device-id", "MFG:CatBridge;MDL:Cat Printer;CMD:PWGRaster;CLS:PRINTER;");
+        w.text("printer-device-id", "MFG:CatBridge;MDL:Cat Printer;CMD:PWGRaster,URF;CLS:PRINTER;");
     if (want("printer-uuid"))
         w.uri("printer-uuid", "urn:uuid:" + printerUuid(printer.id));
     if (want("printer-more-info"))
@@ -943,7 +943,9 @@ void IppServer::opGetPrinterAttributes(const ipp::Request &req, const PrinterRec
         w.mimeType("document-format-default", "application/octet-stream");
     if (want("document-format-supported"))
         w.strings(ipp::TAG_MIME_TYPE, "document-format-supported",
-                  {"application/pwg-raster", "application/octet-stream"});
+                  {"image/pwg-raster", "image/urf", "application/octet-stream"});
+    if (want("urf-supported"))
+        w.keywords("urf-supported", {"V1.4", "CP1", "PQ3-4-5", "RS300", "W8"});
     if (want("pwg-raster-document-type-supported"))
         w.keywords("pwg-raster-document-type-supported", {"black_1", "sgray_8"});
     if (want("pwg-raster-document-resolution-supported"))

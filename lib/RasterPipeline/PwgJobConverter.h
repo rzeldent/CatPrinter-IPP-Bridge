@@ -1,10 +1,10 @@
 /**
  * @file PwgJobConverter.h
- * @brief Streaming conversion of a PWG raster document into a printer bitmap.
+ * @brief Streaming conversion of a PWG or Apple (URF) raster document into a printer bitmap.
  *
  * Glues the raster pipeline together:
  *
- *   PWG raster bytes ─► PwgRasterDecoder ─► toGray() ─► MonoRasterizer ─► MonoBitmap
+ *   PWG/URF raster ─► PwgRasterDecoder ─► toGray() ─► MonoRasterizer ─► MonoBitmap
  *                       (one line buffer)   (one line)  (scale to 384 px,
  *                                                        Floyd–Steinberg,
  *                                                        1-bit pack)

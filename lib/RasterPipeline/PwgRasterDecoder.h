@@ -1,20 +1,24 @@
 /**
  * @file PwgRasterDecoder.h
- * @brief Streaming decoder for PWG Raster (PWG 5102.4, "application/pwg-raster").
+ * @brief Streaming decoder for PWG Raster (PWG 5102.4, "image/pwg-raster")
+ *        and Apple Raster (URF, "image/urf", used by AirPrint).
  *
  * The decoder is a push parser: feed() it arbitrary sized chunks straight
  * from the network and it invokes callbacks for every page header and every
  * decoded raster line. Only one uncompressed line is ever held in memory, so
- * multi-megabyte pages are decoded with a few kilobytes of RAM.
+ * multi-megabyte pages are decoded with a few kilobytes of RAM. The format
+ * is detected from the sync word.
  *
  * Stream layout:
  * @verbatim
- *   "RaS2" | page header (1796 bytes) | compressed lines | page header | ...
+ *   PWG: "RaS2" | page header (1796 bytes) | compressed lines | page header | ...
+ *   URF: "UNIRAST\0" | page count (4) | page header (32 bytes) | compressed lines | ...
  * @endverbatim
  *
  * Line compression: a line-repeat byte (n+1 copies of the line) followed by
  * packets: 0..127 = repeat next pixel (n+1) times, 128..255 = (257-n)
- * literal pixels follow. A "pixel" is ceil(bitsPerPixel/8) bytes.
+ * literal pixels follow. A "pixel" is ceil(bitsPerPixel/8) bytes. In URF
+ * streams 128 means "fill the rest of the line with white".
  */
 #pragma once
 
@@ -67,6 +71,15 @@ namespace raster
     {
     public:
         static constexpr size_t kHeaderSize = 1796;
+        static constexpr size_t kUrfHeaderSize = 32;
+
+        /** Raster flavour, detected from the sync word. */
+        enum class Format : uint8_t
+        {
+            Unknown,
+            Pwg,
+            Urf
+        };
 
         /** Return false to abort decoding (e.g. unsupported page). */
         using PageStartFn = std::function<bool(const PwgPageHeader &header, uint32_t pageIndex)>;
@@ -96,6 +109,7 @@ namespace raster
         bool failed() const { return state_ == State::Error; }
         const std::string &error() const { return error_; }
         uint32_t pagesCompleted() const { return pages_; }
+        Format format() const { return format_; }
 
         /** Reset to the initial state (expecting the sync word). */
         void reset();
@@ -114,10 +128,12 @@ namespace raster
 
         bool fail(const std::string &message);
         bool parseHeader();
+        size_t headerSize() const { return format_ == Format::Urf ? kUrfHeaderSize : kHeaderSize; }
         void writeRepeat(uint32_t count);
         bool lineComplete();
 
         State state_ = State::Sync;
+        Format format_ = Format::Unknown;
         std::string error_;
         std::vector<uint8_t> header_;
         std::vector<uint8_t> line_buf_;

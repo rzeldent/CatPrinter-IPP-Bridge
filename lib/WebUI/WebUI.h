@@ -32,6 +32,7 @@
  */
 #pragma once
 
+#include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
@@ -100,7 +101,7 @@ private:
     void handlePostNetwork(AsyncWebServerRequest *request);
     void handleLogs(AsyncWebServerRequest *request);
 
-    std::string statsJson() const;
+    JsonDocument statsDocument() const;
 
     Context ctx_;
     AsyncWebServer *server_ = nullptr;

@@ -24,7 +24,9 @@
 #include "MacUtil.h"
 #include "PrinterRegistry.h"
 #include "SystemStats.h"
-#include "WebUiPage.h"
+
+extern const uint8_t kIndexHtmlStart[] asm("_binary_html_index_html_start");
+extern const uint8_t kIndexHtmlEnd[] asm("_binary_html_index_html_end");
 
 #ifndef CATBRIDGE_VERSION
 #define CATBRIDGE_VERSION "dev"
@@ -263,8 +265,9 @@ void WebUI::registerRoutes()
 
     s.on(AsyncURIMatcher::exact("/"), HTTP_GET, [](AsyncWebServerRequest *request) {
         SystemStats::instance().httpRequests++;
+        // PlatformIO appends a NUL to embedded text files.
         AsyncWebServerResponse *res = request->beginResponse(
-            200, "text/html", reinterpret_cast<const uint8_t *>(kIndexHtml), strlen(kIndexHtml));
+            200, "text/html", kIndexHtmlStart, kIndexHtmlEnd - kIndexHtmlStart - 1);
         res->addHeader("Cache-Control", "no-cache");
         request->send(res);
     });
@@ -483,7 +486,7 @@ void WebUI::handleJobRoute(AsyncWebServerRequest *request)
 // ===========================================================================
 // Statistics
 // ===========================================================================
-std::string WebUI::statsJson() const
+JsonDocument WebUI::statsDocument() const
 {
     SystemStats &st = SystemStats::instance();
     const uint32_t uptime = PrinterRegistry::nowSeconds();
@@ -534,17 +537,19 @@ std::string WebUI::statsJson() const
         d["lastScanMatches"] = ctx_.discovery->lastScanMatches();
     }
 
-    std::string out;
-    serializeJson(doc, out);
-    return out;
+    return doc;
 }
 
 void WebUI::handleStats(AsyncWebServerRequest *request)
 {
     SystemStats::instance().httpRequests++;
-    AsyncWebServerResponse *res = request->beginResponse(200, kJson, statsJson().c_str());
-    res->addHeader("Cache-Control", "no-store");
-    request->send(res);
+    const JsonDocument doc = statsDocument();
+    if (doc.overflowed())
+    {
+        sendError(request, 503, "not enough memory for statistics");
+        return;
+    }
+    sendJson(request, 200, doc);
 }
 
 void WebUI::handleLogs(AsyncWebServerRequest *request)
@@ -578,6 +583,8 @@ void WebUI::handleGetConfig(AsyncWebServerRequest *request)
     jb["maxRetries"] = b.maxRetries;
     jb["logLevel"] = b.logLevel;
     jb["trimBlankRows"] = b.trimBlankRows;
+    jb["keepAlive"] = b.keepAlive;
+    jb["keepAliveIntervalSec"] = b.keepAliveIntervalSec;
 
     JsonObject jp = doc["protocol"].to<JsonObject>();
     jp["energy"] = p.energy;
@@ -639,13 +646,15 @@ void WebUI::handlePostConfig(AsyncWebServerRequest *request)
     take(jb["maxRetries"], "maxRetries", 1, 10, b.maxRetries);
     take(jb["logLevel"], "logLevel", 0, 3, b.logLevel);
     takeBool(jb["trimBlankRows"], "trimBlankRows", b.trimBlankRows);
+    takeBool(jb["keepAlive"], "keepAlive", b.keepAlive);
+    take(jb["keepAliveIntervalSec"], "keepAliveIntervalSec", 30, 3600, b.keepAliveIntervalSec);
 
     JsonVariantConst jp = body["protocol"];
     take(jp["energy"], "energy", 0, 0xFFFF, p.energy);
     take(jp["speed"], "speed", 1, 255, p.speed);
     take(jp["feedAfterJobLines"], "feedAfterJobLines", 0, 800, p.feedAfterJobLines);
     take(jp["chunkSize"], "chunkSize", 20, 512, p.chunkSize);
-    take(jp["packetDelayMs"], "packetDelayMs", 0, 100, p.packetDelayMs);
+    take(jp["packetDelayMs"], "packetDelayMs", 20, 100, p.packetDelayMs);
 
     if (error.empty() && b.scanDurationSec >= b.scanIntervalSec)
         error = "scanDurationSec must be shorter than scanIntervalSec";
@@ -789,7 +798,17 @@ void WebUI::run()
         {
             lastStats = millis();
             if (events_->count() > 0)
-                events_->send(statsJson().c_str(), "stats", millis());
+            {
+                const JsonDocument doc = statsDocument();
+                if (doc.overflowed())
+                    LOG_W(TAG, "Not enough memory for statistics event");
+                else
+                {
+                    std::string payload;
+                    serializeJson(doc, payload);
+                    events_->send(payload.c_str(), "stats", millis());
+                }
+            }
         }
 
         const uint32_t rebootAt = rebootAtMs_;

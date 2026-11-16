@@ -110,11 +110,38 @@ namespace catgfx
 
     FlowControl LegacyEncoder::parseNotification(const uint8_t *data, size_t len) const
     {
-        // Flow control notification: 51 78 AE 01 01 00 <state> <crc> FF
-        //   state 0x10 = buffer full (pause), 0x00 = ready (resume)
-        if (len < 9 || data[0] != 0x51 || data[1] != 0x78 || data[2] != CMD_FLOW_CONTROL)
-            return FlowControl::None;
-        return data[6] == 0x10 ? FlowControl::Pause : FlowControl::Resume;
+        // A notification can contain multiple frames; the last flow state wins.
+        FlowControl result = FlowControl::None;
+        for (size_t offset = 0; len - offset >= 8;)
+        {
+            const uint8_t *frame = data + offset;
+            if (frame[0] != 0x51 || frame[1] != 0x78)
+            {
+                ++offset;
+                continue;
+            }
+            const size_t payloadBytes = static_cast<size_t>(frame[4]) | (static_cast<size_t>(frame[5]) << 8);
+            if (payloadBytes > len - offset - 8)
+            {
+                ++offset;
+                continue;
+            }
+            const size_t frameBytes = payloadBytes + 8;
+            if (frame[frameBytes - 1] != 0xFF || frame[frameBytes - 2] != crc8(frame + 6, payloadBytes))
+            {
+                ++offset;
+                continue;
+            }
+            if (frame[2] == CMD_FLOW_CONTROL && frame[3] == 0x01 && payloadBytes == 1)
+            {
+                if (frame[6] == 0x10)
+                    result = FlowControl::Pause;
+                else if (frame[6] == 0x00)
+                    result = FlowControl::Resume;
+            }
+            offset += frameBytes;
+        }
+        return result;
     }
 
     std::unique_ptr<ProtocolEncoder> createEncoder(ProtocolFamily family, uint16_t widthPx)

@@ -107,6 +107,36 @@ static void test_encoder_factory()
     TEST_ASSERT_NULL(catgfx::createEncoder(catgfx::ProtocolFamily::CatGfxV2).get());
 }
 
+static void test_flow_control_combined_notifications()
+{
+    catgfx::LegacyEncoder enc;
+    const uint8_t pause[] = {0x51, 0x78, 0xAE, 0x01, 0x01, 0x00, 0x10, 0x70, 0xFF};
+    const uint8_t resume[] = {0x51, 0x78, 0xAE, 0x01, 0x01, 0x00, 0x00, 0x00, 0xFF};
+    const uint8_t status[] = {0x51, 0x78, 0xA3, 0x01, 0x01, 0x00, 0x00, 0x00, 0xFF};
+    std::vector<uint8_t> notification(pause, pause + sizeof(pause));
+    notification.insert(notification.end(), status, status + sizeof(status));
+    notification.insert(notification.end(), resume, resume + sizeof(resume));
+    TEST_ASSERT_TRUE(enc.parseNotification(notification.data(), notification.size()) == catgfx::FlowControl::Resume);
+    notification.insert(notification.end(), pause, pause + sizeof(pause));
+    TEST_ASSERT_TRUE(enc.parseNotification(notification.data(), notification.size()) == catgfx::FlowControl::Pause);
+}
+
+static void test_flow_control_rejects_invalid_notifications()
+{
+    catgfx::LegacyEncoder enc;
+    uint8_t frame[] = {0x51, 0x78, 0xAE, 0x01, 0x01, 0x00, 0x10, 0x70, 0xFF};
+    TEST_ASSERT_TRUE(enc.parseNotification(frame, sizeof(frame) - 1) == catgfx::FlowControl::None);
+    frame[7] ^= 1;
+    TEST_ASSERT_TRUE(enc.parseNotification(frame, sizeof(frame)) == catgfx::FlowControl::None);
+    frame[6] = 0x01;
+    frame[7] = catgfx::crc8(frame + 6, 1);
+    TEST_ASSERT_TRUE(enc.parseNotification(frame, sizeof(frame)) == catgfx::FlowControl::None);
+    frame[6] = 0x10;
+    frame[7] = 0x70;
+    frame[8] = 0;
+    TEST_ASSERT_TRUE(enc.parseNotification(frame, sizeof(frame)) == catgfx::FlowControl::None);
+}
+
 // ---------------------------------------------------------------------------
 // IppProtocol
 // ---------------------------------------------------------------------------
@@ -304,6 +334,45 @@ static void test_pwg_decode_multi_page_and_rgb()
     TEST_ASSERT_EQUAL_UINT8(255, gray[1]);
 }
 
+static void test_urf_decode_sgray_fill_white()
+{
+    std::vector<uint8_t> s = {'U', 'N', 'I', 'R', 'A', 'S', 'T', 0, 0, 0, 0, 1};
+    std::vector<uint8_t> hdr(32, 0);
+    hdr[0] = 8; // bits per pixel
+    hdr[1] = 0; // sGray
+    put32(hdr, 12, 8);
+    put32(hdr, 16, 3);
+    put32(hdr, 20, 300);
+    s.insert(s.end(), hdr.begin(), hdr.end());
+    // line 0 (+1 repeat): 2 x 0x00, then fill the rest with white
+    s.insert(s.end(), {0x01, 0x01, 0x00, 0x80});
+    // line 2: 2 literal pixels, then fill
+    s.insert(s.end(), {0x00, 255, 10, 20, 0x80});
+
+    raster::PwgRasterDecoder dec;
+    std::vector<std::vector<uint8_t>> lines;
+    raster::PwgPageHeader seen;
+    dec.onPageStart([&](const raster::PwgPageHeader &h, uint32_t) {
+        seen = h;
+        return raster::isSupported(h);
+    });
+    dec.onLine([&](const uint8_t *line, uint32_t) { lines.emplace_back(line, line + 8); });
+
+    for (size_t i = 0; i < s.size(); i += 5)
+        TEST_ASSERT_TRUE(dec.feed(s.data() + i, std::min<size_t>(5, s.size() - i)));
+    TEST_ASSERT_TRUE(dec.finish());
+    TEST_ASSERT_TRUE(dec.format() == raster::PwgRasterDecoder::Format::Urf);
+    TEST_ASSERT_EQUAL(1, dec.pagesCompleted());
+    TEST_ASSERT_EQUAL(raster::CSPACE_SW, seen.colorSpace);
+    TEST_ASSERT_EQUAL(300, seen.hwResolutionX);
+    TEST_ASSERT_EQUAL(3, lines.size());
+    const uint8_t l0[] = {0, 0, 255, 255, 255, 255, 255, 255};
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(l0, lines[0].data(), 8);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(l0, lines[1].data(), 8);
+    const uint8_t l2[] = {10, 20, 255, 255, 255, 255, 255, 255};
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(l2, lines[2].data(), 8);
+}
+
 static void test_pwg_rejects_bad_streams()
 {
     raster::PwgRasterDecoder dec;
@@ -470,6 +539,8 @@ int main(int, char **)
     RUN_TEST(test_bitmap_row_bit_order);
     RUN_TEST(test_feed_splits_large_values);
     RUN_TEST(test_flow_control);
+    RUN_TEST(test_flow_control_combined_notifications);
+    RUN_TEST(test_flow_control_rejects_invalid_notifications);
     RUN_TEST(test_encoder_factory);
     RUN_TEST(test_ipp_parse_complete_request);
     RUN_TEST(test_ipp_parse_byte_by_byte);
@@ -477,6 +548,7 @@ int main(int, char **)
     RUN_TEST(test_ipp_writer_encoding);
     RUN_TEST(test_pwg_decode_sgray_compressed);
     RUN_TEST(test_pwg_decode_multi_page_and_rgb);
+    RUN_TEST(test_urf_decode_sgray_fill_white);
     RUN_TEST(test_pwg_rejects_bad_streams);
     RUN_TEST(test_rasterizer_downscale_black);
     RUN_TEST(test_rasterizer_trims_blank_rows);

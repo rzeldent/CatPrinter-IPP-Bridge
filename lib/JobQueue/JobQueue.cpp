@@ -7,6 +7,8 @@
 
 #include <Arduino.h>
 
+#include <algorithm>
+
 #include "BleArbiter.h"
 #include "CatPrinterDriver.h"
 #include "ConfigManager.h"
@@ -19,6 +21,12 @@
 #include "Watchdog.h"
 
 static const char *TAG = "jobs";
+
+namespace
+{
+    constexpr uint32_t kKeepAliveRetrySec = 30;      ///< Retry delay after a failed keep-alive
+    constexpr uint32_t kKeepAliveUnsupportedSec = 3600; ///< Back-off for printers the bridge cannot talk to
+} // namespace
 
 const char *jobTypeName(JobType type)
 {
@@ -79,6 +87,8 @@ void JobQueue::applySettings(const Settings &settings)
     RtosLock lock(mutex_);
     settings_.maxRetries = settings.maxRetries ? settings.maxRetries : 1;
     settings_.retryDelayMs = settings.retryDelayMs;
+    settings_.keepAlive = settings.keepAlive;
+    settings_.keepAliveIntervalSec = settings.keepAliveIntervalSec ? settings.keepAliveIntervalSec : 1;
 }
 
 bool JobQueue::startTask(UBaseType_t priority, BaseType_t core, uint32_t stackSize)
@@ -332,7 +342,70 @@ void JobQueue::run()
             queuedBytes_ -= job->payload.size();
             delete job; // releases the payload (memory leak prevention)
         }
+        else
+        {
+            keepAliveTick();
+        }
         watchdog::feed();
+    }
+}
+
+void JobQueue::keepAliveTick()
+{
+    bool enabled;
+    uint32_t interval;
+    {
+        RtosLock lock(mutex_);
+        enabled = settings_.keepAlive;
+        interval = settings_.keepAliveIntervalSec;
+    }
+    if (!enabled || !registry_)
+        return;
+
+    const uint32_t now = PrinterRegistry::nowSeconds();
+    for (const PrinterRecord &record : registry_->list())
+    {
+        // Offline printers are off (or out of range) and cannot be kept awake.
+        if (!record.online)
+            continue;
+        uint32_t &due = keepAliveDue_[record.mac]; // 0 for a printer not contacted yet: due now
+        if (due > now + interval)
+            due = now + interval; // interval was shortened
+        if (now < due)
+            continue;
+
+        // Skip this tick while the scanner holds the radio; the worker retries a second later.
+        if (!BleArbiter::instance().acquire(pdMS_TO_TICKS(500)))
+            return;
+
+        const PrinterProfile *profile = PrinterProfiles::findByName(record.profileName);
+        if (!profile)
+            profile = &PrinterProfiles::defaultProfile();
+
+        CatPrinterDriver::Options options;
+        options.connectAttempts = 2;
+        options.verbose = false;
+        CatPrinterDriver driver;
+        driver.setOptions(options);
+        const bool ok = driver.connect(record.mac, record.addrType, *profile) && driver.ping();
+        const CatPrinterDriver::Error error = driver.lastError();
+        driver.disconnect();
+        BleArbiter::instance().release();
+
+        const uint32_t after = PrinterRegistry::nowSeconds();
+        if (ok)
+        {
+            registry_->touch(record.mac);
+            LOG_D(TAG, "Keep-alive sent to %s", record.mac.c_str());
+            due = after + interval;
+        }
+        else
+        {
+            LOG_I(TAG, "Keep-alive for %s failed: %s", record.mac.c_str(), CatPrinterDriver::errorString(error));
+            due = after + (error == CatPrinterDriver::Error::UnsupportedProtocol ? kKeepAliveUnsupportedSec
+                                                                                  : std::min(interval, kKeepAliveRetrySec));
+        }
+        return; // one printer per tick keeps newly queued jobs responsive
     }
 }
 
@@ -473,6 +546,10 @@ bool JobQueue::execute(PrintJob &job, std::string &error, bool &retryable)
         return false;
     }
     registry_->touch(record.mac); // a successful connection proves the printer is alive
+    {
+        RtosLock lock(mutex_);
+        keepAliveDue_[record.mac] = PrinterRegistry::nowSeconds() + settings_.keepAliveIntervalSec;
+    }
 
     uint32_t rowsSent = 0;
     auto progress = [&](uint32_t done, uint32_t total) {

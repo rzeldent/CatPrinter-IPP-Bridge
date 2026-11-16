@@ -124,7 +124,8 @@ bool MdnsPublisher::publish(const Entry &entry, const std::string &instance)
     const std::string adminurl = "http://" + hostname_ + ".local/";
     const std::string product = "(" + entry.model + ")";
 
-    // IPP Everywhere / Bonjour Printing TXT keys.
+    // IPP Everywhere / Bonjour Printing TXT keys, plus the AirPrint keys (URF, air)
+    // without which iOS does not list the printer.
     mdns_txt_item_t txt[] = {
         {"txtvers", "1"},
         {"qtotal", "1"},
@@ -133,7 +134,9 @@ bool MdnsPublisher::publish(const Entry &entry, const std::string &instance)
         {"product", product.c_str()},
         {"note", entry.location.c_str()},
         {"adminurl", adminurl.c_str()},
-        {"pdl", "application/pwg-raster,application/octet-stream"},
+        {"pdl", "image/pwg-raster,image/urf,application/octet-stream"},
+        {"URF", "V1.4,CP1,PQ3-4-5,RS300,W8"},
+        {"air", "none"},
         {"Color", "F"},
         {"Duplex", "F"},
         {"kind", "receipt,roll"},
@@ -148,9 +151,12 @@ bool MdnsPublisher::publish(const Entry &entry, const std::string &instance)
         LOG_E(TAG, "Advertising '%s' failed: %s", instance.c_str(), esp_err_to_name(err));
         return false;
     }
-    err = mdns_service_subtype_add_for_host(instance.c_str(), "_ipp", "_tcp", nullptr, "_print");
-    if (err != ESP_OK)
-        LOG_W(TAG, "Adding _print subtype for '%s' failed: %s", instance.c_str(), esp_err_to_name(err));
+    for (const char *subtype : {"_print", "_universal"})
+    {
+        err = mdns_service_subtype_add_for_host(instance.c_str(), "_ipp", "_tcp", nullptr, subtype);
+        if (err != ESP_OK)
+            LOG_W(TAG, "Adding %s subtype for '%s' failed: %s", subtype, instance.c_str(), esp_err_to_name(err));
+    }
 
     LOG_I(TAG, "Advertising IPP printer '%s' (%s)", instance.c_str(), rp.c_str());
     return true;
