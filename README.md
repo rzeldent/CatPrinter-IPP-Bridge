@@ -1,5 +1,10 @@
 # Kitty IPP Bridge
 
+[![Build](https://github.com/rzeldent/kitty-ipp-bridge/actions/workflows/main.yml/badge.svg)](https://github.com/rzeldent/kitty-ipp-bridge/actions/workflows/main.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
+[![PlatformIO](https://img.shields.io/badge/PlatformIO-orange?logo=platformio&logoColor=white)](https://platformio.org/)
+[![ESP32](https://img.shields.io/badge/ESP32-S3-red?logo=espressif&logoColor=white)](https://www.espressif.com/en/products/socs/esp32-s3)
+
 CatPrinter IPP Bridge runs on an ESP32 and connects compatible Bluetooth Low
 Energy (BLE) thermal printers to a Wi-Fi network. It discovers printers by
 their BLE service UUIDs and exposes them as IPP printers using mDNS/DNS-SD.
@@ -35,6 +40,10 @@ The upload command builds the firmware first. The default environment is
 PSRAM is detected and halts with a serial error before starting Wi-Fi, BLE or
 printing services if it is unavailable. If PlatformIO cannot find the board,
 specify its serial port with `--upload-port`.
+
+Every push runs a GitHub Actions build for `esp32s3-psram`. Successful runs
+provide an `esp32s3-psram` artifact containing `firmware.bin` and `firmware.elf`
+on the workflow run's summary page.
 
 ## Connect to Wi-Fi
 
