@@ -18,6 +18,26 @@ IPP jobs must be PWG Raster (`image/pwg-raster`) or Apple Raster
 (`image/urf`, used by AirPrint), or one of these sent as
 `application/octet-stream`; the bridge converts them to monochrome bitmaps.
 
+## Status dashboard
+
+Open [http://catbridge.local/](http://catbridge.local/) (or the bridge's IP
+address) to view the live status dashboard.
+
+![CatPrinter IPP Bridge status dashboard](assets/images/status%20page.png)
+
+- **Status cards** show uptime, free heap, online and known printers, and
+  successful or failed print jobs.
+- **Printers** lists each printer's status, signal strength (RSSI), last-seen
+  time, and IPP URI. Use the actions to rename a printer, print an identification
+  or test page, or forget it. **Scan now** requests a new discovery scan.
+- **Jobs** shows queued and recent jobs with their state, progress, and messages.
+- **Bridge settings** controls discovery, retries, keep-alive, and printer
+  protocol settings. Click **Save** to apply changes; queue-size changes require
+  a reboot.
+- **Log** shows live diagnostics, including keep-alive attempts and printing
+  errors. **Details** provides firmware and memory statistics for troubleshooting.
+- **Network** configures Wi-Fi and the bridge hostname.
+
 ## Requirements
 
 - An ESP32-S3 development board with octal PSRAM (such as N16R8) and a USB data cable.
