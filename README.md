@@ -90,7 +90,7 @@ address) to view the live status dashboard.
 
 ## Requirements
 
-- An ESP32-S3 development board with octal PSRAM (such as N16R8) and a USB data cable.
+- An ESP32-S3 development board with PSRAM (N16R8 recommended, or FH4R2) and a USB data cable.
 - A compatible BLE Cat Printer.
 - A 2.4 GHz Wi-Fi network and a computer or phone on the same network.
 - [PlatformIO](https://platformio.org/install) to build and upload the firmware.
@@ -105,18 +105,23 @@ the complete bridge reliably.
 | Board | Suitability for this project |
 | --- | --- |
 | **ESP32-S3 with octal PSRAM** | Supported target. An **N16R8** board (16 MB flash, 8 MB PSRAM) matches the supplied firmware configuration. |
+| **ESP32-S3FH4R2 with quad PSRAM** | Build target `esp32s3-fh4r2`: 4 MB flash, 2 MB PSRAM, and reduced job-memory limits. Hardware validation is still required. |
 | **ESP32-C3** | Not enough memory for this project's combined networking, BLE, and printing workload. It has Wi-Fi and BLE, but is not a supported target. |
 | **ESP32-S2** | No Bluetooth hardware, so it cannot communicate with the BLE printers, even if the board has PSRAM. |
 | **ESP32-S3 without PSRAM** | Not supported. The firmware checks for PSRAM at startup and stops if it is unavailable. |
 
 PSRAM provides space for large job and image buffers; it does not replace all
-internal RAM needed by Wi-Fi, BLE, and task stacks. The firmware currently
-limits an incoming IPP document and the total queued job payloads to 2 MiB
-each. Extra flash storage is not a substitute for RAM.
+internal RAM needed by Wi-Fi, BLE, and task stacks. The N16R8 build limits each
+converted job bitmap and the total queued/active job payloads to 2 MiB each.
+The FH4R2 build reduces both limits to 512 KiB, leaving room for raster
+conversion and other allocations in its smaller PSRAM. These limits apply to
+converted output, not the size of the uploaded raster document. Extra flash
+storage is not a substitute for RAM.
 
 Check the actual module specification before buying: not every ESP32-S3 board
-includes PSRAM. The supplied build uses **octal PSRAM and a 16 MB flash
-partition layout**; boards with different memory sizes or PSRAM types need
+includes PSRAM. Select the matching environment: N16R8 uses **octal PSRAM and
+a 16 MB flash partition layout**, while FH4R2 uses **quad PSRAM and a 4 MB
+layout** with two 1.875 MiB application slots. Other memory configurations need
 matching build settings rather than the unmodified firmware.
 
 ## Build and flash
@@ -125,28 +130,34 @@ Connect the ESP32 by USB and run this command from the project
 directory:
 
 ```sh
-# ESP32-S3 with octal PSRAM, such as N16R8
-pio run -e esp32s3-psram -t upload
+# ESP32-S3 N16R8: 16 MB flash, 8 MB octal PSRAM
+pio run -e esp32s3-n16r8 -t upload
+
+# ESP32-S3FH4R2: 4 MB flash, 2 MB quad PSRAM
+pio run -e esp32s3-fh4r2 -t upload
 ```
 
 The upload command builds the firmware first. The default environment is
-`esp32s3-psram`; boards without PSRAM are not supported. Startup checks that
+`esp32s3-n16r8`; boards without PSRAM are not supported. Startup checks that
 PSRAM is detected and halts with a serial error before starting Wi-Fi, BLE or
 printing services if it is unavailable. If PlatformIO cannot find the board,
 specify its serial port with `--upload-port`.
 
-Every push runs a GitHub Actions build for `esp32s3-psram`. Successful runs
-provide an `esp32s3-psram` artifact containing `firmware.bin` and `firmware.elf`
-on the workflow run's summary page.
+Every push runs a GitHub Actions build matrix for `esp32s3-n16r8` and
+`esp32s3-fh4r2`. Successful builds provide a separate artifact named after
+each environment, containing `firmware.bin` and `firmware.elf`, on the workflow
+run's summary page.
 
 ### Create a release
 
 In GitHub, open **Actions > Create release > Run workflow**, select the source
-branch, and enter a new tag such as `v1.0.0`. The workflow builds the
-`esp32s3-psram` firmware, creates an annotated tag on the selected commit, and
-publishes a GitHub Release with generated release notes, `firmware.bin`, and
-`firmware.elf`. GitHub also provides source archives for the tag. Existing tags
-are rejected, and the source is tagged only after the build succeeds.
+branch, and enter a new tag such as `v1.0.0`. The workflow builds both
+`esp32s3-n16r8` and `esp32s3-fh4r2` using a matrix. After both builds succeed,
+a single publishing job creates an annotated tag on the selected commit and
+publishes a GitHub Release with generated release notes. The release includes
+`esp32s3-n16r8.bin`, `esp32s3-n16r8.elf`, `esp32s3-fh4r2.bin`, and
+`esp32s3-fh4r2.elf`, so the board variants cannot overwrite each other.
+GitHub also provides source archives for the tag. Existing tags are rejected.
 
 The workflow must be present on the default branch before it can be run
 manually.

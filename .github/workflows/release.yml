@@ -9,17 +9,21 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and publish ESP32-S3 release
+  build:
+    name: Build ${{ matrix.environment }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [esp32s3-n16r8, esp32s3-fh4r2]
     env:
       RELEASE_TAG: ${{ inputs.tag }}
     steps:
@@ -49,7 +53,42 @@ jobs:
         run: python -m pip install platformio
 
       - name: Build firmware
-        run: platformio run -e esp32s3-psram
+        run: platformio run -e ${{ matrix.environment }}
+
+      - name: Prepare release files
+        run: |
+          mkdir -p artifacts
+          cp .pio/build/${{ matrix.environment }}/firmware.bin artifacts/${{ matrix.environment }}.bin
+          cp .pio/build/${{ matrix.environment }}/firmware.elf artifacts/${{ matrix.environment }}.elf
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.environment }}
+          path: artifacts/*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Download firmware
+        uses: actions/download-artifact@v7
+        with:
+          pattern: esp32s3-*
+          merge-multiple: true
+          path: artifacts
 
       - name: Tag source commit
         shell: bash
@@ -68,5 +107,5 @@ jobs:
             --verify-tag \
             --title "$RELEASE_TAG" \
             --generate-notes \
-            .pio/build/esp32s3-psram/firmware.bin \
-            .pio/build/esp32s3-psram/firmware.elf
+            artifacts/*.bin \
+            artifacts/*.elf

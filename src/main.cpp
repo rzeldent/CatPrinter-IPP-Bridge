@@ -43,6 +43,9 @@
 #ifndef CATBRIDGE_HOSTNAME
 #define CATBRIDGE_HOSTNAME "catbridge"
 #endif
+#ifndef CATBRIDGE_JOB_BUDGET_BYTES
+#define CATBRIDGE_JOB_BUDGET_BYTES (2 * 1024 * 1024)
+#endif
 
 static const char *TAG = "main";
 
@@ -57,7 +60,7 @@ namespace
     constexpr uint32_t kHeapLogPeriodMs = 300000;     ///< Periodic heap report
     constexpr uint32_t kLowHeapBytes = 16 * 1024;     ///< Below this the bridge is considered starving
     constexpr uint8_t kLowHeapRestartChecks = 6;      ///< Consecutive low readings before a restart (30 s)
-    constexpr size_t kJobBudgetPsram = 2 * 1024 * 1024;
+    constexpr size_t kJobBudgetPsram = CATBRIDGE_JOB_BUDGET_BYTES;
 } // namespace
 
 // ---------------------------------------------------------------------------
