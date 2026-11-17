@@ -1,6 +1,6 @@
 /**
  * @file main.cpp
- * @brief CatPrinter IPP Bridge - firmware entry point.
+ * @brief KittyPrinter IPP Bridge - firmware entry point.
  *
  * Wires the subsystems together and starts the FreeRTOS tasks:
  *
@@ -283,7 +283,7 @@ void setup()
     log.addSink(&gSerialLog);
     log.addSink(&gRingLog);
 
-    LOG_I(TAG, "CatPrinter IPP Bridge %s starting (reset reason %d, heap %u, psram %u)", CATBRIDGE_VERSION,
+    LOG_I(TAG, "KittyPrinter IPP Bridge %s starting (reset reason %d, heap %u, psram %u)", CATBRIDGE_VERSION,
           static_cast<int>(esp_reset_reason()), static_cast<unsigned>(ESP.getFreeHeap()),
           static_cast<unsigned>(ESP.getPsramSize()));
 

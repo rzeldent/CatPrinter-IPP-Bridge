@@ -1,11 +1,11 @@
-# CatPrinter IPP Bridge
+# KittyPrinter IPP Bridge
 
 [![Build](https://github.com/rzeldent/kitty-ipp-bridge/actions/workflows/main.yml/badge.svg)](https://github.com/rzeldent/kitty-ipp-bridge/actions/workflows/main.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-orange?logo=platformio&logoColor=white)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-S3-red?logo=espressif&logoColor=white)](https://www.espressif.com/en/products/socs/esp32-s3)
 
-CatPrinter IPP Bridge runs on an ESP32 and connects compatible Bluetooth Low
+KittyPrinter IPP Bridge runs on an ESP32 and connects compatible Bluetooth Low
 Energy (BLE) thermal printers to a Wi-Fi network. It discovers printers by
 their BLE service UUIDs and exposes them as IPP printers using mDNS/DNS-SD.
 The web dashboard shows discovered printers and print jobs and provides
@@ -73,7 +73,7 @@ The raster pipeline's `dither = false` option still uses simple thresholding.
 Open [http://catbridge.local/](http://catbridge.local/) (or the bridge's IP
 address) to view the live status dashboard.
 
-![CatPrinter IPP Bridge status dashboard](assets/images/status%20page.png)
+![KittyPrinter IPP Bridge status dashboard](assets/images/status%20page.png)
 
 - **Status cards** show uptime, free heap, online and known printers, and
   successful or failed print jobs.
